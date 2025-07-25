@@ -1,5 +1,5 @@
 [book]
 authors = ["Niko Matsakis"]
 language = "en"
-src = "src"
+src = "md"
 title = "Hippo, yet another MCP memory server"
