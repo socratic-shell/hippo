@@ -19,7 +19,7 @@ class SearchResult(BaseModel):
     """A single search result with computed relevance."""
     
     insight: Insight = Field(description="The matched insight")
-    votes: float = Field(description="Current votes (with decay applied)")
+    importance: float = Field(description="Current importance (with decay applied)")
     relevance: float = Field(description="Computed search relevance combining votes and semantic matching")
     content_match: bool = Field(description="Whether the insight content matches the query")
     situation_matches: List[str] = Field(
@@ -39,9 +39,9 @@ class SearchResults(BaseModel):
     total_matching: int = Field(
         description="Total number of insights matching the search criteria"
     )
-    votes_distribution: Dict[str, int] = Field(
+    importance_distribution: Dict[str, int] = Field(
         default_factory=dict,
-        description="Distribution of votes across all insights"
+        description="Distribution of importance across all insights"
     )
     
     @property
@@ -96,13 +96,13 @@ class InsightSearcher:
         offset, count = limit or (0, 10)
         paginated = filtered[offset:offset + count]
         
-        # Calculate votes distribution
-        distribution = self._calculate_votes_distribution(insights)
+        # Calculate importance distribution
+        distribution = self._calculate_importance_distribution(insights)
         
         return SearchResults(
             insights=paginated,
             total_matching=len(filtered),
-            votes_distribution=distribution,
+            importance_distribution=distribution,
         )
     
     def _apply_filters(
@@ -116,8 +116,8 @@ class InsightSearcher:
         results = []
         
         for insight in insights:
-            # Step 1: Compute current votes (reinforcement with decay)
-            current_votes = insight.compute_current_votes()
+            # Step 1: Compute current importance (reinforcement with decay)
+            current_importance = insight.compute_current_importance()
             
             # Step 2: Compute semantic relevance scores
             content_relevance = self._compute_content_relevance(insight.content, query) if query else 1.0
@@ -128,14 +128,12 @@ class InsightSearcher:
             )
             
             # Step 3: Calculate final composite relevance
-            # Formula: votes + content + situation + importance weighting
-            # Weight: 50% votes, 30% content, 10% situation, 10% importance boost
-            normalized_votes = min(current_votes / 2.0, 1.0)  # Normalize to 0-1 range
+            # Formula: importance + content + situation weighting
+            # Weight: 60% importance, 30% content, 10% situation
             final_relevance = (
-                0.5 * normalized_votes +
+                0.6 * current_importance +
                 0.3 * content_relevance + 
-                0.1 * situation_relevance +
-                0.1 * insight.importance  # Importance acts as a boost
+                0.1 * situation_relevance
             )
             
             # Step 4: Apply relevance range filtering on final computed relevance
@@ -154,7 +152,7 @@ class InsightSearcher:
             if query_passes and situation_passes:
                 results.append(SearchResult(
                     insight=insight,
-                    votes=current_votes,
+                    importance=current_importance,
                     relevance=final_relevance,
                     content_match=content_match,
                     situation_matches=situation_matches,
@@ -261,11 +259,11 @@ class InsightSearcher:
         _, matches = self._compute_situation_relevance(situation, filter_terms)
         return matches
     
-    def _calculate_votes_distribution(
+    def _calculate_importance_distribution(
         self,
         insights: List[Insight]
     ) -> Dict[str, int]:
-        """Calculate distribution of votes across all insights."""
+        """Calculate distribution of importance across all insights."""
         distribution = {
             "below_0.2": 0,
             "0.2_to_0.4": 0,
@@ -276,16 +274,16 @@ class InsightSearcher:
         }
         
         for insight in insights:
-            votes = insight.compute_current_votes()
-            if votes < 0.2:
+            importance = insight.compute_current_importance()
+            if importance < 0.2:
                 distribution["below_0.2"] += 1
-            elif votes < 0.4:
+            elif importance < 0.4:
                 distribution["0.2_to_0.4"] += 1
-            elif votes < 0.6:
+            elif importance < 0.6:
                 distribution["0.4_to_0.6"] += 1
-            elif votes < 0.8:
+            elif importance < 0.8:
                 distribution["0.6_to_0.8"] += 1
-            elif votes <= 1.0:
+            elif importance <= 1.0:
                 distribution["0.8_to_1.0"] += 1
             else:
                 distribution["above_1.0"] += 1
