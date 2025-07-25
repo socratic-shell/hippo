@@ -170,13 +170,13 @@ class HippoServer:
                             "upvotes": {
                                 "type": "array",
                                 "items": {"type": "string"},
-                                "description": "Array of UUIDs to upvote (2.0x votes multiplier)",
+                                "description": "Array of UUIDs to upvote (1.5x importance multiplier)",
                                 "default": []
                             },
                             "downvotes": {
                                 "type": "array",
                                 "items": {"type": "string"},
-                                "description": "Array of UUIDs to downvote (0.1x votes multiplier)",
+                                "description": "Array of UUIDs to downvote (0.5x importance multiplier)",
                                 "default": []
                             }
                         }
@@ -250,18 +250,18 @@ class HippoServer:
                         "uuid": str(r.insight.uuid),
                         "content": r.insight.content,
                         "situation": r.insight.situation,
-                        "importance": r.insight.importance,
-                        "votes": r.votes,
+                        "base_importance": r.insight.importance,
+                        "current_importance": r.importance,
                         "relevance": r.relevance,
                         "created_at": r.insight.created_at.isoformat(),
                         "days_since_created": r.insight.days_since_created(),
-                        "days_since_votes_modified": r.insight.days_since_votes_modified(),
+                        "days_since_importance_modified": r.insight.days_since_importance_modified(),
                     }
                     for r in results.insights
                 ],
                 "total_matching": results.total_matching,
                 "returned_count": results.returned_count,
-                "votes_distribution": results.votes_distribution,
+                "importance_distribution": results.importance_distribution,
             }
             
             import json
@@ -305,9 +305,9 @@ class HippoServer:
             # Apply reinforcement
             reinforce = args.get("reinforce", "upvote")
             if reinforce == "upvote":
-                insight.apply_reinforcement(2.0)
+                insight.apply_reinforcement(1.5)
             elif reinforce == "downvote":
-                insight.apply_reinforcement(0.1)
+                insight.apply_reinforcement(0.5)
             
             # Save
             await self.storage.update_insight(insight)
@@ -334,11 +334,11 @@ class HippoServer:
             
             for insight in insights:
                 if insight.uuid in upvotes:
-                    insight.apply_reinforcement(2.0)
+                    insight.apply_reinforcement(1.5)
                     modified.append(str(insight.uuid))
                     await self.storage.update_insight(insight)
                 elif insight.uuid in downvotes:
-                    insight.apply_reinforcement(0.1)
+                    insight.apply_reinforcement(0.5)
                     modified.append(str(insight.uuid))
                     await self.storage.update_insight(insight)
             

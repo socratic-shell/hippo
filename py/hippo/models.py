@@ -34,12 +34,8 @@ class Insight(BaseModel):
     content_last_modified_at: datetime = Field(
         description="When the content or context was last edited"
     )
-    votes_at_last_change: float = Field(
-        default=1.0,
-        description="The votes when they were last modified (starts at 1.0)"
-    )
-    votes_last_modified_at: datetime = Field(
-        description="When the votes were last explicitly changed (upvote/downvote)"
+    importance_last_modified_at: datetime = Field(
+        description="When the importance was last explicitly changed (upvote/downvote)"
     )
     
     @classmethod
@@ -57,41 +53,41 @@ class Insight(BaseModel):
             importance=importance,
             created_at=now,
             content_last_modified_at=now,
-            votes_last_modified_at=now,
+            importance_last_modified_at=now,
         )
     
-    def compute_current_votes(self) -> float:
+    def compute_current_importance(self) -> float:
         """
-        Compute the current votes based on temporal decay.
+        Compute the current importance based on temporal decay.
         
-        Formula: current_votes = base_votes * importance * recency_factor
-        where recency_factor = 0.9 ^ days_since_votes_last_modified
+        Formula: current_importance = base_importance * recency_factor
+        where recency_factor = 0.9 ^ days_since_importance_last_modified
         """
         now = datetime.now(timezone.utc)
-        days_elapsed = (now - self.votes_last_modified_at).total_seconds() / 86400
+        days_elapsed = (now - self.importance_last_modified_at).total_seconds() / 86400
         recency_factor = math.pow(0.9, days_elapsed)
-        return self.votes_at_last_change * self.importance * recency_factor
+        return self.importance * recency_factor
     
     def days_since_created(self) -> float:
         """Calculate days since creation."""
         now = datetime.now(timezone.utc)
         return (now - self.created_at).total_seconds() / 86400
     
-    def days_since_votes_modified(self) -> float:
-        """Calculate days since votes were last modified."""
+    def days_since_importance_modified(self) -> float:
+        """Calculate days since importance was last modified."""
         now = datetime.now(timezone.utc)
-        return (now - self.votes_last_modified_at).total_seconds() / 86400
+        return (now - self.importance_last_modified_at).total_seconds() / 86400
     
     def apply_reinforcement(self, multiplier: float) -> None:
         """
         Apply reinforcement (upvote/downvote) to the insight.
         
         Args:
-            multiplier: Votes multiplier (2.0 for upvote, 0.1 for downvote)
+            multiplier: Importance multiplier (1.5 for upvote, 0.5 for downvote)
         """
-        current_votes = self.compute_current_votes()
-        self.votes_at_last_change = current_votes * multiplier
-        self.votes_last_modified_at = datetime.now(timezone.utc)
+        current_importance = self.compute_current_importance()
+        self.importance = min(1.0, current_importance * multiplier)  # Cap at 1.0
+        self.importance_last_modified_at = datetime.now(timezone.utc)
     
     def update_content(
         self,
