@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import math
-from datetime import datetime, timezone
-from typing import List, Optional
+from datetime import datetime, timezone, date
+from typing import List, Optional, Tuple
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
@@ -36,6 +36,14 @@ class Insight(BaseModel):
     )
     importance_last_modified_at: datetime = Field(
         description="When the importance was last explicitly changed (upvote/downvote)"
+    )
+    daily_access_counts: List[Tuple[int, int]] = Field(
+        default_factory=list,
+        description="List of (active_day, access_count) pairs, max 90 entries, oldest first"
+    )
+    last_accessed_active_day: Optional[int] = Field(
+        default=None,
+        description="The active day when this insight was last accessed"
     )
     
     @classmethod
@@ -89,6 +97,66 @@ class Insight(BaseModel):
         self.importance = min(1.0, current_importance * multiplier)  # Cap at 1.0
         self.importance_last_modified_at = datetime.now(timezone.utc)
     
+    def record_access(self, current_active_day: int) -> None:
+        """
+        Record an access to this insight on the given active day.
+        
+        Args:
+            current_active_day: The current active day counter
+        """
+        # 💡: Using active day counter instead of calendar time to handle vacation periods
+        # where the system isn't used - insights don't decay during inactive periods
+        self.last_accessed_active_day = current_active_day
+        
+        # Find today's entry in the access counts list
+        if self.daily_access_counts and self.daily_access_counts[-1][0] == current_active_day:
+            # Increment existing entry for today
+            day, count = self.daily_access_counts[-1]
+            self.daily_access_counts[-1] = (day, count + 1)
+        else:
+            # Add new entry for today
+            self.daily_access_counts.append((current_active_day, 1))
+        
+        # Trim list to max 90 entries (remove oldest)
+        if len(self.daily_access_counts) > 90:
+            self.daily_access_counts.pop(0)
+    
+    def calculate_frequency(self) -> float:
+        """
+        Calculate frequency as accesses per active day over the recorded period.
+        
+        Returns:
+            Average accesses per active day, or 0.0 if no access history
+        """
+        if not self.daily_access_counts:
+            return 0.0
+        
+        oldest_active_day = self.daily_access_counts[0][0]
+        newest_active_day = self.daily_access_counts[-1][0]
+        active_days_spanned = newest_active_day - oldest_active_day + 1
+        total_accesses = sum(count for _, count in self.daily_access_counts)
+        
+        return total_accesses / active_days_spanned
+    
+    def calculate_recency_score(self, current_active_day: int, decay_rate: float = 0.05) -> float:
+        """
+        Calculate recency score using exponential decay based on active days since last access.
+        
+        Args:
+            current_active_day: Current active day counter
+            decay_rate: Decay rate per active day (default 0.05)
+            
+        Returns:
+            Recency score between 0.0 and 1.0
+        """
+        if self.last_accessed_active_day is None:
+            # Never accessed, use creation as baseline (assuming created on active day 0)
+            active_days_since_access = current_active_day
+        else:
+            active_days_since_access = current_active_day - self.last_accessed_active_day
+        
+        return math.exp(-decay_rate * active_days_since_access)
+    
     def update_content(
         self,
         content: Optional[str] = None,
@@ -113,6 +181,30 @@ class HippoStorage(BaseModel):
         default_factory=list,
         description="List of all insights in the system"
     )
+    active_day_counter: int = Field(
+        default=0,
+        description="Counter of active days - increments each calendar day the system is used"
+    )
+    last_calendar_date_used: Optional[date] = Field(
+        default=None,
+        description="Last calendar date the system was used (to detect new active days)"
+    )
+    
+    def get_current_active_day(self) -> int:
+        """
+        Get the current active day, incrementing the counter if this is a new calendar day.
+        
+        Returns:
+            Current active day counter
+        """
+        today = date.today()
+        
+        # If this is the first use ever, or a new calendar day, increment counter
+        if self.last_calendar_date_used != today:
+            self.active_day_counter += 1
+            self.last_calendar_date_used = today
+        
+        return self.active_day_counter
     
     def add_insight(self, insight: Insight) -> None:
         """Add a new insight to storage."""

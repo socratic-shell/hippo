@@ -234,14 +234,17 @@ class HippoServer:
                 relevance_range = (rr.get("min", 0.1), rr.get("max"))
             
             # Perform search
-            insights = await self.storage.get_all_insights()
+            storage_data = await self.storage.load()
             results = self.searcher.search(
-                insights=insights,
+                storage=storage_data,
                 query=query,
                 situation_filter=situation_filter,
                 relevance_range=relevance_range,
                 limit=limit,
             )
+            
+            # Save storage after recording accesses
+            await self.storage.save()
             
             # Format results
             output = {
