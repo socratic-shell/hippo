@@ -270,7 +270,7 @@ class HippoServer:
                 ],
                 "total_matching": results.total_matching,
                 "returned_count": results.returned_count,
-                "importance_distribution": results.importance_distribution,
+                "relevance_distribution": results.relevance_distribution,
             }
             
             import json

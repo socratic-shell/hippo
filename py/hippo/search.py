@@ -48,9 +48,9 @@ class SearchResults(BaseModel):
     total_matching: int = Field(
         description="Total number of insights matching the search criteria"
     )
-    importance_distribution: Dict[str, int] = Field(
+    relevance_distribution: Dict[str, int] = Field(
         default_factory=dict,
-        description="Distribution of importance across all insights"
+        description="Distribution of relevance scores across all insights for the given query/filters"
     )
     
     @property
@@ -115,13 +115,15 @@ class InsightSearcher:
             for result in paginated:
                 result.insight.record_access(current_active_day)
         
-        # Calculate importance distribution
-        distribution = self._calculate_importance_distribution(storage.insights)
+        # Calculate relevance distribution for all insights using same query/filters
+        distribution = self._calculate_relevance_distribution(
+            storage.insights, current_active_day, query, situation_filter
+        )
         
         return SearchResults(
             insights=paginated,
             total_matching=len(filtered),
-            importance_distribution=distribution,
+            relevance_distribution=distribution,
         )
     
     def _apply_filters(
@@ -286,11 +288,17 @@ class InsightSearcher:
         _, matches = self._compute_situation_relevance(situation, filter_terms)
         return matches
     
-    def _calculate_importance_distribution(
+    def _calculate_relevance_distribution(
         self,
-        insights: List[Insight]
+        insights: List[Insight],
+        current_active_day: int,
+        query: str = "",
+        situation_filter: Optional[List[str]] = None
     ) -> Dict[str, int]:
-        """Calculate distribution of importance across all insights."""
+        """Calculate distribution of relevance scores across all insights."""
+        # 💡: Calculate relevance distribution to help clients understand what additional
+        # data exists beyond their filtered results. Uses same composite relevance formula
+        # as search filtering but without applying thresholds.
         distribution = {
             "below_0.2": 0,
             "0.2_to_0.4": 0,
@@ -301,16 +309,40 @@ class InsightSearcher:
         }
         
         for insight in insights:
-            importance = insight.compute_current_importance()
-            if importance < 0.2:
+            # Compute the same composite relevance score used in filtering
+            current_importance = insight.compute_current_importance()
+            
+            # Compute semantic relevance scores
+            content_relevance = self._compute_content_relevance(insight.content, query) if query else 1.0
+            situation_relevance, _ = (
+                self._compute_situation_relevance(insight.situation, situation_filter) 
+                if situation_filter 
+                else (1.0, [])
+            )
+            
+            # Compute temporal factors
+            recency_score = insight.calculate_recency_score(current_active_day)
+            frequency_score = insight.calculate_frequency(current_active_day)
+            normalized_frequency = min(1.0, frequency_score / MAX_REASONABLE_FREQUENCY)
+            
+            # Calculate final composite relevance using same formula as search
+            relevance = (
+                RELEVANCE_WEIGHT_RECENCY * recency_score +
+                RELEVANCE_WEIGHT_FREQUENCY * normalized_frequency +
+                RELEVANCE_WEIGHT_IMPORTANCE * current_importance +
+                RELEVANCE_WEIGHT_CONTEXT * situation_relevance
+            )
+            
+            # Bin by relevance score
+            if relevance < 0.2:
                 distribution["below_0.2"] += 1
-            elif importance < 0.4:
+            elif relevance < 0.4:
                 distribution["0.2_to_0.4"] += 1
-            elif importance < 0.6:
+            elif relevance < 0.6:
                 distribution["0.4_to_0.6"] += 1
-            elif importance < 0.8:
+            elif relevance < 0.8:
                 distribution["0.6_to_0.8"] += 1
-            elif importance <= 1.0:
+            elif relevance <= 1.0:
                 distribution["0.8_to_1.0"] += 1
             else:
                 distribution["above_1.0"] += 1
