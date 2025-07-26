@@ -121,22 +121,38 @@ class Insight(BaseModel):
         if len(self.daily_access_counts) > 90:
             self.daily_access_counts.pop(0)
     
-    def calculate_frequency(self) -> float:
+    def calculate_frequency(self, current_active_day: int, window_days: int = 30) -> float:
         """
-        Calculate frequency as accesses per active day over the recorded period.
+        Calculate frequency as accesses per active day over a recent window.
         
+        Args:
+            current_active_day: Current active day counter
+            window_days: Number of recent active days to consider (default 30)
+            
         Returns:
-            Average accesses per active day, or 0.0 if no access history
+            Average accesses per active day over the recent window, or 0.0 if no access history
         """
         if not self.daily_access_counts:
             return 0.0
         
-        oldest_active_day = self.daily_access_counts[0][0]
-        newest_active_day = self.daily_access_counts[-1][0]
-        active_days_spanned = newest_active_day - oldest_active_day + 1
-        total_accesses = sum(count for _, count in self.daily_access_counts)
+        # 💡: Use recent window instead of full history to avoid frequency dilution
+        # from long gaps. An insight accessed twice in 30 days should have higher
+        # frequency than one accessed once in 1 day.
+        window_start = current_active_day - window_days + 1
+        recent_entries = [
+            (day, count) for day, count in self.daily_access_counts 
+            if day >= window_start
+        ]
         
-        return total_accesses / active_days_spanned
+        if not recent_entries:
+            return 0.0
+        
+        oldest_recent_day = recent_entries[0][0]
+        newest_recent_day = recent_entries[-1][0]
+        recent_days_spanned = newest_recent_day - oldest_recent_day + 1
+        total_recent_accesses = sum(count for _, count in recent_entries)
+        
+        return total_recent_accesses / recent_days_spanned
     
     def calculate_recency_score(self, current_active_day: int, decay_rate: float = 0.05) -> float:
         """
