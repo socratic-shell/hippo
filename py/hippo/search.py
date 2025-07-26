@@ -98,13 +98,23 @@ class InsightSearcher:
         # Get current active day for temporal calculations
         current_active_day = storage.get_current_active_day()
         
-        # Apply filters
-        filtered = self._apply_filters(
-            storage.insights, query, situation_filter, relevance_range, current_active_day
+        # Compute relevance scores for all insights (with minimal filtering)
+        all_scored = self._compute_relevance_scores(
+            storage.insights, query, situation_filter, current_active_day
         )
         
-        # Sort by relevance
-        filtered.sort(key=lambda r: r.relevance, reverse=True)
+        # Calculate relevance distribution from all scored results
+        distribution = self._calculate_distribution_from_results(all_scored)
+        
+        # Apply relevance range filtering
+        filtered = all_scored
+        if relevance_range:
+            min_relevance, max_relevance = relevance_range
+            filtered = [
+                result for result in all_scored
+                if result.relevance >= min_relevance and 
+                   (max_relevance is None or result.relevance <= max_relevance)
+            ]
         
         # Apply pagination
         offset, count = limit or (0, 10)
@@ -115,26 +125,20 @@ class InsightSearcher:
             for result in paginated:
                 result.insight.record_access(current_active_day)
         
-        # Calculate relevance distribution for all insights using same query/filters
-        distribution = self._calculate_relevance_distribution(
-            storage.insights, current_active_day, query, situation_filter
-        )
-        
         return SearchResults(
             insights=paginated,
             total_matching=len(filtered),
             relevance_distribution=distribution,
         )
     
-    def _apply_filters(
+    def _compute_relevance_scores(
         self,
         insights: List[Insight],
         query: str,
         situation_filter: Optional[List[str]],
-        relevance_range: Optional[Tuple[float, Optional[float]]],
         current_active_day: int,
     ) -> List[SearchResult]:
-        """Apply all filters and return SearchResult objects."""
+        """Compute relevance scores for all insights without applying filters."""
         results = []
         
         for insight in insights:
@@ -165,19 +169,13 @@ class InsightSearcher:
                 RELEVANCE_WEIGHT_CONTEXT * situation_relevance
             )
             
-            # Step 5: Apply relevance range filtering on final computed relevance
-            if relevance_range:
-                min_relevance, max_relevance = relevance_range
-                if final_relevance < min_relevance:
-                    continue
-                if max_relevance is not None and final_relevance > max_relevance:
-                    continue
-            
-            # Step 6: Apply content/situation matching filters (separate from relevance)
+            # Step 5: Apply minimal filtering - either content or situation must have some relevance
+            # 💡: Only exclude insights that are completely irrelevant to the query/situation
             content_match = content_relevance > CONTENT_MATCH_THRESHOLD
             query_passes = not query or content_match
             situation_passes = not situation_filter or situation_relevance > SITUATION_MATCH_THRESHOLD
             
+            # Only include if there's some relevance to the query
             if query_passes and situation_passes:
                 results.append(SearchResult(
                     insight=insight,
@@ -187,6 +185,8 @@ class InsightSearcher:
                     situation_matches=situation_matches,
                 ))
         
+        # Sort by relevance (highest first)
+        results.sort(key=lambda r: r.relevance, reverse=True)
         return results
     
     def _compute_content_relevance(self, content: str, query: str) -> float:
@@ -288,17 +288,13 @@ class InsightSearcher:
         _, matches = self._compute_situation_relevance(situation, filter_terms)
         return matches
     
-    def _calculate_relevance_distribution(
+    def _calculate_distribution_from_results(
         self,
-        insights: List[Insight],
-        current_active_day: int,
-        query: str = "",
-        situation_filter: Optional[List[str]] = None
+        results: List[SearchResult]
     ) -> Dict[str, int]:
-        """Calculate distribution of relevance scores across all insights."""
-        # 💡: Calculate relevance distribution to help clients understand what additional
-        # data exists beyond their filtered results. Uses same composite relevance formula
-        # as search filtering but without applying thresholds.
+        """Calculate distribution of relevance scores from SearchResult objects."""
+        # 💡: Calculate distribution from already-computed SearchResults to avoid
+        # duplicating the relevance calculation logic
         distribution = {
             "below_0.2": 0,
             "0.2_to_0.4": 0,
@@ -308,32 +304,8 @@ class InsightSearcher:
             "above_1.0": 0,
         }
         
-        for insight in insights:
-            # Compute the same composite relevance score used in filtering
-            current_importance = insight.compute_current_importance()
-            
-            # Compute semantic relevance scores
-            content_relevance = self._compute_content_relevance(insight.content, query) if query else 1.0
-            situation_relevance, _ = (
-                self._compute_situation_relevance(insight.situation, situation_filter) 
-                if situation_filter 
-                else (1.0, [])
-            )
-            
-            # Compute temporal factors
-            recency_score = insight.calculate_recency_score(current_active_day)
-            frequency_score = insight.calculate_frequency(current_active_day)
-            normalized_frequency = min(1.0, frequency_score / MAX_REASONABLE_FREQUENCY)
-            
-            # Calculate final composite relevance using same formula as search
-            relevance = (
-                RELEVANCE_WEIGHT_RECENCY * recency_score +
-                RELEVANCE_WEIGHT_FREQUENCY * normalized_frequency +
-                RELEVANCE_WEIGHT_IMPORTANCE * current_importance +
-                RELEVANCE_WEIGHT_CONTEXT * situation_relevance
-            )
-            
-            # Bin by relevance score
+        for result in results:
+            relevance = result.relevance
             if relevance < 0.2:
                 distribution["below_0.2"] += 1
             elif relevance < 0.4:
