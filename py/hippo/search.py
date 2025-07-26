@@ -68,25 +68,30 @@ class InsightSearcher:
     
     def search(
         self,
-        insights: List[Insight],
+        storage,  # HippoStorage instance
         query: str = "",
         situation_filter: Optional[List[str]] = None,
         relevance_range: Optional[Tuple[float, Optional[float]]] = None,
         limit: Optional[Tuple[int, int]] = None,
+        record_access: bool = True,
     ) -> SearchResults:
         """
         Search insights with various filters.
         
         Args:
-            insights: All insights to search through
+            storage: HippoStorage instance containing insights
             query: Text to search for in content
             situation_filter: Situation elements to match (partial matching)
             relevance_range: (min_relevance, max_relevance) tuple
             limit: (offset, count) tuple for pagination
+            record_access: Whether to record access for returned insights
         """
+        # Get current active day for temporal calculations
+        current_active_day = storage.get_current_active_day()
+        
         # Apply filters
         filtered = self._apply_filters(
-            insights, query, situation_filter, relevance_range
+            storage.insights, query, situation_filter, relevance_range, current_active_day
         )
         
         # Sort by relevance
@@ -96,8 +101,13 @@ class InsightSearcher:
         offset, count = limit or (0, 10)
         paginated = filtered[offset:offset + count]
         
+        # Record access for returned insights if requested
+        if record_access:
+            for result in paginated:
+                result.insight.record_access(current_active_day)
+        
         # Calculate importance distribution
-        distribution = self._calculate_importance_distribution(insights)
+        distribution = self._calculate_importance_distribution(storage.insights)
         
         return SearchResults(
             insights=paginated,
@@ -111,6 +121,7 @@ class InsightSearcher:
         query: str,
         situation_filter: Optional[List[str]],
         relevance_range: Optional[Tuple[float, Optional[float]]],
+        current_active_day: int,
     ) -> List[SearchResult]:
         """Apply all filters and return SearchResult objects."""
         results = []
@@ -127,16 +138,23 @@ class InsightSearcher:
                 else (1.0, [])
             )
             
-            # Step 3: Calculate final composite relevance
-            # Formula: importance + content + situation weighting
-            # Weight: 60% importance, 30% content, 10% situation
+            # Step 3: Compute temporal factors
+            # 💡: Using research-based formula: 30% recency + 20% frequency + 35% importance + 15% context
+            recency_score = insight.calculate_recency_score(current_active_day)
+            frequency_score = insight.calculate_frequency()
+            
+            # Normalize frequency score to 0-1 range (assuming max reasonable frequency is 10 accesses/day)
+            normalized_frequency = min(1.0, frequency_score / 10.0)
+            
+            # Step 4: Calculate final composite relevance using research formula
             final_relevance = (
-                0.6 * current_importance +
-                0.3 * content_relevance + 
-                0.1 * situation_relevance
+                0.30 * recency_score +           # 30% recency
+                0.20 * normalized_frequency +    # 20% frequency  
+                0.35 * current_importance +      # 35% importance
+                0.15 * situation_relevance       # 15% context (situation matching)
             )
             
-            # Step 4: Apply relevance range filtering on final computed relevance
+            # Step 5: Apply relevance range filtering on final computed relevance
             if relevance_range:
                 min_relevance, max_relevance = relevance_range
                 if final_relevance < min_relevance:
@@ -144,7 +162,7 @@ class InsightSearcher:
                 if max_relevance is not None and final_relevance > max_relevance:
                     continue
             
-            # Step 5: Apply content/situation matching filters (separate from relevance)
+            # Step 6: Apply content/situation matching filters (separate from relevance)
             content_match = content_relevance > 0.4
             query_passes = not query or content_match
             situation_passes = not situation_filter or situation_relevance > 0.4
