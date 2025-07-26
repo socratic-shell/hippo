@@ -47,8 +47,7 @@ The key insight: Generate insights cheaply and frequently, let natural selection
         [1, 3],   // Active day 1: 3 accesses
         [3, 1],   // Active day 3: 1 access  
         [15, 2]   // Active day 15: 2 accesses
-      ],
-      "last_accessed_active_day": 15
+      ]
     }
   ]
 }
@@ -66,8 +65,7 @@ The key insight: Generate insights cheaply and frequently, let natural selection
 - **importance_last_modified_at**: When importance was last changed via reinforcement
 - **situation**: Array of independent situational aspects describing when/where the insight occurred
 - **importance**: AI-generated 0-1 rating of insight significance, modified by reinforcement
-- **daily_access_counts**: List of [active_day, count] pairs, max 90 entries, oldest first
-- **last_accessed_active_day**: Most recent active day this insight was accessed
+- **daily_access_counts**: List of [active_day, count] pairs, max 90 entries, oldest first. Creation is recorded as first access.
 
 ### Temporal Scoring
 
