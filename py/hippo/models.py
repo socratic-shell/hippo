@@ -39,11 +39,7 @@ class Insight(BaseModel):
     )
     daily_access_counts: List[Tuple[int, int]] = Field(
         default_factory=list,
-        description="List of (active_day, access_count) pairs, max 90 entries, oldest first"
-    )
-    last_accessed_active_day: Optional[int] = Field(
-        default=None,
-        description="The active day when this insight was last accessed"
+        description="List of (active_day, access_count) pairs, max 90 entries, oldest first. Active days are calendar days when the system was actually used (vacation-proof)."
     )
     
     @classmethod
@@ -52,10 +48,11 @@ class Insight(BaseModel):
         content: str,
         situation: List[str],
         importance: float,
+        current_active_day: int,
     ) -> Insight:
-        """Create a new insight with current timestamp."""
+        """Create a new insight with current timestamp and record creation as first access."""
         now = datetime.now(timezone.utc)
-        return cls(
+        insight = cls(
             content=content,
             situation=situation,
             importance=importance,
@@ -63,6 +60,10 @@ class Insight(BaseModel):
             content_last_modified_at=now,
             importance_last_modified_at=now,
         )
+        # 💡: Treat creation as the first access event - this eliminates the need for
+        # special handling of never-accessed insights in recency calculations
+        insight.daily_access_counts = [(current_active_day, 1)]
+        return insight
     
     def compute_current_importance(self) -> float:
         """
@@ -106,7 +107,6 @@ class Insight(BaseModel):
         """
         # 💡: Using active day counter instead of calendar time to handle vacation periods
         # where the system isn't used - insights don't decay during inactive periods
-        self.last_accessed_active_day = current_active_day
         
         # Find today's entry in the access counts list
         if self.daily_access_counts and self.daily_access_counts[-1][0] == current_active_day:
@@ -149,12 +149,13 @@ class Insight(BaseModel):
         Returns:
             Recency score between 0.0 and 1.0
         """
-        if self.last_accessed_active_day is None:
-            # Never accessed, use creation as baseline (assuming created on active day 0)
-            active_days_since_access = current_active_day
-        else:
-            active_days_since_access = current_active_day - self.last_accessed_active_day
+        if not self.daily_access_counts:
+            # This should never happen since creation records first access,
+            # but handle gracefully just in case
+            return 0.0
         
+        last_access_day = self.daily_access_counts[-1][0]
+        active_days_since_access = current_active_day - last_access_day
         return math.exp(-decay_rate * active_days_since_access)
     
     def update_content(

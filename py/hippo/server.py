@@ -202,12 +202,17 @@ class HippoServer:
     async def _record_insight(self, args: Dict[str, Any]) -> List[TextContent]:
         """Record a new insight."""
         try:
+            storage_data = await self.storage.load()
+            current_active_day = storage_data.get_current_active_day()
+            
             insight = Insight.create(
                 content=args["content"],
                 situation=args["situation"],
                 importance=args["importance"],
+                current_active_day=current_active_day,
             )
-            await self.storage.add_insight(insight)
+            storage_data.add_insight(insight)
+            await self.storage.save()
             
             return [TextContent(
                 type="text",
