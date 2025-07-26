@@ -141,7 +141,7 @@ class InsightSearcher:
             # Step 3: Compute temporal factors
             # 💡: Using research-based formula: 30% recency + 20% frequency + 35% importance + 15% context
             recency_score = insight.calculate_recency_score(current_active_day)
-            frequency_score = insight.calculate_frequency()
+            frequency_score = insight.calculate_frequency(current_active_day)
             
             # Normalize frequency score to 0-1 range (assuming max reasonable frequency is 10 accesses/day)
             normalized_frequency = min(1.0, frequency_score / 10.0)
