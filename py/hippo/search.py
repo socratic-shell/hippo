@@ -10,6 +10,15 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from .models import Insight
+from .constants import (
+    RELEVANCE_WEIGHT_RECENCY,
+    RELEVANCE_WEIGHT_FREQUENCY,
+    RELEVANCE_WEIGHT_IMPORTANCE,
+    RELEVANCE_WEIGHT_CONTEXT,
+    MAX_REASONABLE_FREQUENCY,
+    CONTENT_MATCH_THRESHOLD,
+    SITUATION_MATCH_THRESHOLD,
+)
 
 # Configure logging for sentence transformers (can be noisy)
 logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
@@ -143,15 +152,15 @@ class InsightSearcher:
             recency_score = insight.calculate_recency_score(current_active_day)
             frequency_score = insight.calculate_frequency(current_active_day)
             
-            # Normalize frequency score to 0-1 range (assuming max reasonable frequency is 10 accesses/day)
-            normalized_frequency = min(1.0, frequency_score / 10.0)
+            # Normalize frequency score to 0-1 range
+            normalized_frequency = min(1.0, frequency_score / MAX_REASONABLE_FREQUENCY)
             
             # Step 4: Calculate final composite relevance using research formula
             final_relevance = (
-                0.30 * recency_score +           # 30% recency
-                0.20 * normalized_frequency +    # 20% frequency  
-                0.35 * current_importance +      # 35% importance
-                0.15 * situation_relevance       # 15% context (situation matching)
+                RELEVANCE_WEIGHT_RECENCY * recency_score +
+                RELEVANCE_WEIGHT_FREQUENCY * normalized_frequency +
+                RELEVANCE_WEIGHT_IMPORTANCE * current_importance +
+                RELEVANCE_WEIGHT_CONTEXT * situation_relevance
             )
             
             # Step 5: Apply relevance range filtering on final computed relevance
@@ -163,9 +172,9 @@ class InsightSearcher:
                     continue
             
             # Step 6: Apply content/situation matching filters (separate from relevance)
-            content_match = content_relevance > 0.4
+            content_match = content_relevance > CONTENT_MATCH_THRESHOLD
             query_passes = not query or content_match
-            situation_passes = not situation_filter or situation_relevance > 0.4
+            situation_passes = not situation_filter or situation_relevance > SITUATION_MATCH_THRESHOLD
             
             if query_passes and situation_passes:
                 results.append(SearchResult(

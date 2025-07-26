@@ -4,7 +4,7 @@ Consult the mdbook sources in the `md` directory below to find documentation on 
 
 @md/SUMMARY.md
 
-We track progress in github tracking issues:
+We track progress in github tracking issues on the repository `socratic-shell/hippo`:
 
 @.socratic-shell/github-tracking-issues.md
 

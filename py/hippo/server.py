@@ -12,6 +12,7 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
+from .constants import UPVOTE_MULTIPLIER, DOWNVOTE_MULTIPLIER
 from .models import Insight
 from .search import InsightSearcher
 from .storage import JsonStorage
@@ -313,9 +314,9 @@ class HippoServer:
             # Apply reinforcement
             reinforce = args.get("reinforce", "upvote")
             if reinforce == "upvote":
-                insight.apply_reinforcement(1.5)
+                insight.apply_reinforcement(UPVOTE_MULTIPLIER)
             elif reinforce == "downvote":
-                insight.apply_reinforcement(0.5)
+                insight.apply_reinforcement(DOWNVOTE_MULTIPLIER)
             
             # Save
             await self.storage.update_insight(insight)
@@ -342,11 +343,11 @@ class HippoServer:
             
             for insight in insights:
                 if insight.uuid in upvotes:
-                    insight.apply_reinforcement(1.5)
+                    insight.apply_reinforcement(UPVOTE_MULTIPLIER)
                     modified.append(str(insight.uuid))
                     await self.storage.update_insight(insight)
                 elif insight.uuid in downvotes:
-                    insight.apply_reinforcement(0.5)
+                    insight.apply_reinforcement(DOWNVOTE_MULTIPLIER)
                     modified.append(str(insight.uuid))
                     await self.storage.update_insight(insight)
             

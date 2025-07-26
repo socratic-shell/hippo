@@ -9,6 +9,14 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
+from .constants import (
+    FREQUENCY_WINDOW_DAYS,
+    RECENCY_DECAY_RATE,
+    MAX_DAILY_ACCESS_ENTRIES,
+    UPVOTE_MULTIPLIER,
+    DOWNVOTE_MULTIPLIER,
+)
+
 
 class Insight(BaseModel):
     """An insight generated during AI-human collaboration."""
@@ -39,7 +47,7 @@ class Insight(BaseModel):
     )
     daily_access_counts: List[Tuple[int, int]] = Field(
         default_factory=list,
-        description="List of (active_day, access_count) pairs, max 90 entries, oldest first. Active days are calendar days when the system was actually used (vacation-proof)."
+        description=f"List of (active_day, access_count) pairs, max {MAX_DAILY_ACCESS_ENTRIES} entries, oldest first. Active days are calendar days when the system was actually used (vacation-proof)."
     )
     
     @classmethod
@@ -92,7 +100,7 @@ class Insight(BaseModel):
         Apply reinforcement (upvote/downvote) to the insight.
         
         Args:
-            multiplier: Importance multiplier (1.5 for upvote, 0.5 for downvote)
+            multiplier: Importance multiplier (UPVOTE_MULTIPLIER for upvote, DOWNVOTE_MULTIPLIER for downvote)
         """
         current_importance = self.compute_current_importance()
         self.importance = min(1.0, current_importance * multiplier)  # Cap at 1.0
@@ -117,11 +125,11 @@ class Insight(BaseModel):
             # Add new entry for today
             self.daily_access_counts.append((current_active_day, 1))
         
-        # Trim list to max 90 entries (remove oldest)
-        if len(self.daily_access_counts) > 90:
+        # Trim list to max entries (remove oldest)
+        if len(self.daily_access_counts) > MAX_DAILY_ACCESS_ENTRIES:
             self.daily_access_counts.pop(0)
     
-    def calculate_frequency(self, current_active_day: int, window_days: int = 30) -> float:
+    def calculate_frequency(self, current_active_day: int, window_days: int = FREQUENCY_WINDOW_DAYS) -> float:
         """
         Calculate frequency as accesses per active day over a recent window.
         
@@ -154,7 +162,7 @@ class Insight(BaseModel):
         
         return total_recent_accesses / recent_days_spanned
     
-    def calculate_recency_score(self, current_active_day: int, decay_rate: float = 0.05) -> float:
+    def calculate_recency_score(self, current_active_day: int, decay_rate: float = RECENCY_DECAY_RATE) -> float:
         """
         Calculate recency score using exponential decay based on active days since last access.
         
