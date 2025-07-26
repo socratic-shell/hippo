@@ -359,7 +359,7 @@ class HippoServer:
     async def run(self) -> None:
         """Run the MCP server."""
         async with stdio_server() as (read_stream, write_stream):
-            await self.server.run(read_stream, write_stream)
+            await self.server.run(read_stream, write_stream, {})
 
 
 @click.command()
