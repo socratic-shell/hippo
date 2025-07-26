@@ -28,20 +28,27 @@ The key insight: Generate insights cheaply and frequently, let natural selection
 
 ```json
 {
+  "active_day_counter": 15,
+  "last_calendar_date_used": "2025-07-26",
   "insights": [
     {
       "uuid": "abc123-def456-789",
       "content": "User prefers dialogue format over instruction lists for collaboration prompts",
-      "context": [
+      "situation": [
         "design discussion about hippo",
-        "defining collaboration patterns",
+        "defining collaboration patterns", 
         "comparing instruction vs dialogue formats"
       ],
       "importance": 0.7,
       "created_at": "2025-07-23T17:00:00Z",
       "content_last_modified_at": "2025-07-23T17:00:00Z",
-      "score_at_last_change": 1.0,
-      "score_last_modified_at": "2025-07-23T17:00:00Z"
+      "importance_last_modified_at": "2025-07-23T17:00:00Z",
+      "daily_access_counts": [
+        [1, 3],   // Active day 1: 3 accesses
+        [3, 1],   // Active day 3: 1 access  
+        [15, 2]   // Active day 15: 2 accesses
+      ],
+      "last_accessed_active_day": 15
     }
   ]
 }
@@ -49,56 +56,83 @@ The key insight: Generate insights cheaply and frequently, let natural selection
 
 ### Field Semantics
 
+**Global Fields:**
+- **active_day_counter**: Counter of "active days" - only increments when system is used
+- **last_calendar_date_used**: Last calendar date system was used (to detect new active days)
+
+**Per-Insight Fields:**
 - **created_at**: When the insight was first generated (never changes)
-- **content_last_modified_at**: When the content or context was last edited
-- **context**: Array of independent situational aspects describing when/where the insight occurred
-- **importance**: AI-generated 0-1 rating of insight significance (set at creation)
-- **score_at_last_change**: The score when it was last modified (starts at 1.0)
-- **score_last_modified_at**: When the score was last explicitly changed (upvote/downvote)
+- **content_last_modified_at**: When the content or situation was last edited
+- **importance_last_modified_at**: When importance was last changed via reinforcement
+- **situation**: Array of independent situational aspects describing when/where the insight occurred
+- **importance**: AI-generated 0-1 rating of insight significance, modified by reinforcement
+- **daily_access_counts**: List of [active_day, count] pairs, max 90 entries, oldest first
+- **last_accessed_active_day**: Most recent active day this insight was accessed
 
-### Score Computation
+### Temporal Scoring
 
-Current score computed on-demand using research-backed weighting:
+Current relevance computed using research-based formula:
 
 ```
-current_score = base_score * importance * recency_factor
+relevance = 0.30 * recency + 0.20 * frequency + 0.35 * importance + 0.15 * context
 
 where:
-base_score = score_at_last_change  
-recency_factor = 0.9 ^ days_since_score_last_modified
-importance = AI-generated 0-1 rating (acts as importance weight from research)
+recency = exp(-0.05 * active_days_since_last_access)
+frequency = min(1.0, accesses_per_active_day / 10.0)  
+importance = current_importance_with_decay
+context = situation_matching_score
 ```
+
+**Active Day Benefits:**
+- **Vacation-proof**: No decay during inactive periods
+- **Natural pacing**: Temporal calculations based on actual usage, not calendar time
+- **Bounded storage**: Access history limited to 90 entries regardless of usage frequency
 
 For search ranking, we'll eventually incorporate the full research formula:
 ```
 Relevance = 0.3×Recency + 0.2×Frequency + 0.35×Importance + 0.15×Context_Similarity
 ```
 
-MVP implementation focuses on Recency (decay) and Importance (AI rating), with Frequency and Context_Similarity planned for future iterations.
+**Key Innovation**: Active day counter ensures insights don't decay during vacation periods when the system isn't used.
 
-#### Score Evolution Examples
+#### Temporal Evolution Examples
 
 ```
-Day 0: Insight created → score_at_last_change = 1.0, last_change_date = today
-Day 3: Current score = 1.0 * 0.9³ = 0.729 (computed on-demand)
-Day 3: User upvotes → score_at_last_change = 0.729 * 2.0 = 1.458, last_change_date = today
-Day 7: Current score = 1.458 * 0.9⁴ = 0.953 (computed on-demand)
-Day 7: User downvotes → score_at_last_change = 0.953 * 0.1 = 0.095, last_change_date = today
+Active Day 1: Insight created, accessed once
+  - daily_access_counts: [[1, 1]]
+  - frequency: 1.0 accesses/day, recency: 1.0 (just accessed)
+
+Active Day 5: Insight accessed twice  
+  - daily_access_counts: [[1, 1], [5, 2]]
+  - frequency: 3/5 = 0.6 accesses/day, recency: 1.0 (just accessed)
+
+Active Day 10: Insight not accessed (but system used)
+  - daily_access_counts: [[1, 1], [5, 2]] (unchanged)
+  - frequency: 3/5 = 0.6 accesses/day, recency: exp(-0.05 * 5) = 0.78
+
+User goes on vacation for 30 calendar days (system unused)
+  - Active day counter stays at 10
+  - All temporal scores remain frozen (vacation-proof!)
+
+Active Day 11: User returns, accesses insight
+  - daily_access_counts: [[1, 1], [5, 2], [11, 1]]  
+  - frequency: 4/11 = 0.36 accesses/day, recency: 1.0 (just accessed)
 ```
 
-#### Score Interpretation
+#### Relevance Interpretation
 
-- **> 1.0**: Reinforced insights that have proven valuable
-- **0.5 - 1.0**: Recent insights or those aging naturally  
-- **< 0.5**: Old insights that haven't been reinforced
-- **< 0.1**: Effectively irrelevant, candidates for cleanup
+- **> 0.8**: Frequently accessed, recently used, high importance
+- **0.5 - 0.8**: Moderately relevant, good balance of factors
+- **0.2 - 0.5**: Older or less frequently accessed insights
+- **< 0.2**: Rarely accessed, low importance, candidates for cleanup
 
 #### Search Ranking
 
-Current score (computed on-demand) is a primary factor in search results:
-- Higher scores surface first
-- Combined with content/context match quality
-- Provides natural filtering of stale insights
+Relevance score (computed on-demand) combines all factors:
+- 30% recency: How recently accessed (active days)
+- 20% frequency: How often accessed per active day
+- 35% importance: AI assessment + reinforcement
+- 15% context: Situation matching quality
 
 ## Key Design Decisions
 
