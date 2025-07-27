@@ -1,56 +1,69 @@
 # Hippo: AI-Generated Insights Memory System
 
-An MCP server that implements an AI memory system using reinforcement learning to surface valuable insights from conversations.
+An experiment in collaborative memory through reinforcement learning.
 
-## Installation
+Hippo is a memory system designed to let insights emerge organically through usage patterns. It supplies the LLM with tools to record insights and then later to indicate which ones are useful via up/down-voting (similar to reddit or stack overflow) and to make edits.
+
+## Quick Start
+
+### Connect to Your AI Tool
+
+**For Q CLI:**
+```bash
+q configure add-server hippo "uv run --directory /path/to/hippo python -m py.hippo.server --hippo-file /path/to/hippo/data/hippo.json"
+```
+
+**For Claude Desktop:** Add to `claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "hippo": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/hippo", "python", "-m", "py.hippo.server", "--hippo-file", "/path/to/hippo/data/hippo.json"]
+    }
+  }
+}
+```
+
+See [MCP Server Setup](md/mcp-setup.md) for complete installation instructions.
+
+### Alternative: Docker/Podman
 
 ```bash
-# Install proto toolchain manager
-curl -L https://moonrepo.dev/install/proto.sh | bash
+# Build and run
+podman build -t hippo-server .
+mkdir -p ./data
+podman run -d --name hippo -p 8080:8080 -v ./data:/data:Z hippo-server
+```
 
-# Install uv via proto
-proto install
+### Using uv directly
 
+```bash
 # Install dependencies
-cd hippo
 uv sync
+
+# Run the server
+uv run python -m py.hippo.server --hippo-file ./hippo.json
 ```
 
-## Usage
+## Documentation
 
-Run the MCP server:
+See the `md/` directory for comprehensive documentation:
+
+- [MCP Server Setup](md/mcp-setup.md) - **Connect Hippo to your AI tool**
+- [Introduction](md/introduction.md) - What is Hippo and why
+- [How to Use It](md/how-to-use.md) - Usage guide for AI assistants
+- [Docker Usage](md/docker.md) - Container deployment guide
+- [Design Document](md/design-doc.md) - Deep concepts and philosophy
+
+## Testing
+
+Run the integration test suite:
 
 ```bash
-uv run hippo-server --hippo-file /path/to/hippo.json
+uv run python -m tests.test_temporal_scoring
 ```
 
-Or use the installed script after `uv sync`:
+## Status
 
-```bash
-hippo-server --hippo-file /path/to/hippo.json
-```
-
-## Development
-
-Run type checking:
-
-```bash
-uv run mypy py/hippo
-```
-
-Run tests:
-
-```bash
-uv run pytest
-```
-
-## MCP Tools
-
-The server provides four MCP tools:
-
-- `hippo_record_insight` - Record new insights during consolidation moments
-- `hippo_search_insights` - Search insights with fuzzy context matching
-- `hippo_modify_insight` - Modify existing insights
-- `hippo_reinforce_insight` - Apply upvotes/downvotes to insights
-
-See the [design documentation](src/design-doc.md) for detailed specifications.
+Prototype implementation.

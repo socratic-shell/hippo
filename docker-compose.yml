@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  hippo:
+    build: .
+    container_name: hippo-server
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mount local directory for persistent storage
+      - ./data:/data
+    environment:
+      # Add any environment variables here if needed
+      - PYTHONUNBUFFERED=1
+    # Override default command if needed
+    # command: ["uv", "run", "python", "-m", "py.hippo.server", "--hippo-file", "/data/hippo.json", "--port", "8080"]
