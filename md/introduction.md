@@ -4,37 +4,15 @@
 
 ## Overview
 
-Hippo is a memory system designed for AI-human collaboration that automatically generates insights during conversations and uses reinforcement learning to surface the most valuable ones over time.
+Hippo is a memory system designed to let insights emerge organically through usage patterns. It supplies the LLM with tools to record insights and then later to indicate which ones are useful via up/down-voting (similar to reddit or stack overflow) and to make edits.
 
-## Core Hypothesis
+## Design principles
 
-**AI-generated insights + user reinforcement > manual curation**
-
-Traditional memory systems require users to manually decide what to remember. Hippo tests whether AI can generate insights automatically during natural conversation, then use user feedback to learn which insights are truly valuable.
-
-## Key Features
-
-1. **Automatic Generation**: AI generates insights during consolidation moments ("Make it so", checkpointing)
-2. **Temporal Decay**: Insights lose relevance over time unless reinforced
-3. **Reinforcement Learning**: User feedback (upvotes/downvotes) affects future surfacing
-4. **Context-Aware Search**: Retrieval considers both content and situational context
-5. **Hybrid Workflow**: AI suggests reinforcement based on usage patterns, user confirms
-
-## What Makes It Different
-
-- **No manual curation burden** - insights generated automatically
-- **Learning from usage** - reinforcement based on what actually proves helpful
-- **Contextual matching** - finds insights from similar situations
-- **Natural integration** - works within existing consolidation workflows
-
-## Implementation
-
-Hippo is implemented as an MCP (Model Context Protocol) server providing tools for:
-- Recording insights with importance ratings
-- Searching insights with semantic context matching  
-- Reinforcing insights through user feedback
-- Modifying insights as understanding evolves
+* **Embrace the mess.** What makes LLMs amazing is that, like humans, they *don't* require formal structure or precision to extract meaning. Hippo avoids structure and instead aims to surface text to the LLM, letting it draw the necessary connections and interpretations.
+* **Reinforce what's useful, let the rest fade.** It's very hard to know what you're going to need to remember in the future. Hippo encourages the LLM to generate lots of memories but then to "curate" the ones that turn out to be useful.
+* **Mimic human systems.** Hippo is loosely inspired by human memory systems. We match not only on memory content but also on situational context for better precision. We try to leverage bits of research, but we also know that LLMs are not humans so we are willing to stray in the details.
+* **Integrate with collaborative prompting patterns.** Hippo is designed to work best with the [collaborative prompting](https://socratic-shell.github.io/socratic-shell/collaborative-prompting.html) style. Memories are fetched during the [ideation and exploration](https://socratic-shell.github.io/socratic-shell/prompts/user/index.html#collaborative-exploration-patterns) phase and then reinforced and updated during ["make it so"](https://socratic-shell.github.io/socratic-shell/prompts/user/index.html#make-it-so---transitioning-to-action) and [checkpoint](https://socratic-shell.github.io/socratic-shell/prompts/user/index.html#checkpointing-your-work) moments.
 
 ## Status
 
-Currently in design phase with comprehensive specifications ready for implementation. See the [Design Document](./design-doc.md) for technical details.
+Prototype implementation.
