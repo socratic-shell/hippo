@@ -15,13 +15,54 @@ from py.hippo.constants import (
 )
 
 
+class TestStorageWrapper:
+    """Wrapper to adapt InMemoryStorage to JsonStorage interface."""
+    
+    def __init__(self, storage: InMemoryStorage):
+        self.storage = storage
+    
+    async def load(self):
+        """Return the storage instance directly."""
+        return self.storage
+    
+    async def save(self):
+        """No-op for in-memory storage."""
+        pass
+    
+    async def add_insight(self, insight):
+        """Add insight to storage."""
+        self.storage.add_insight(insight)  # Now synchronous
+        
+    async def update_insight(self, insight):
+        """Update insight in storage."""
+        self.storage.update_insight(insight)  # Now synchronous
+        return True
+    
+    async def get_all_insights(self):
+        """Get all insights from storage."""
+        return self.storage.get_all_insights()  # Now synchronous
+
+
 class TestTemporalScoring:
     """Integration tests for temporal scoring through MCP server interface."""
     
     def setup_method(self):
         """Set up test environment for each test."""
         self.storage = InMemoryStorage()
-        self.server = HippoServer(self.storage)
+        # 💡: For now, we'll create a HippoServer with a dummy path and then
+        # replace its storage with our InMemoryStorage. This is a bit hacky
+        # but allows us to test without modifying the server constructor.
+        from pathlib import Path
+        import tempfile
+        
+        # Create server with temporary path
+        temp_path = Path(tempfile.mktemp())
+        self.server = HippoServer(temp_path)
+        
+        # Replace the JsonStorage with our InMemoryStorage
+        # We need to create a wrapper that has the same interface as JsonStorage
+        self.server.storage = TestStorageWrapper(self.storage)
+        
         self.time_ctrl = TestTimeController(self.storage)
     
     async def create_insight(self, content: str, situation: list = None, importance: float = 0.8) -> str:
@@ -35,7 +76,7 @@ class TestTemporalScoring:
             "importance": importance,
         }
         
-        result = await self.server._create_insight(args)
+        result = await self.server._record_insight(args)
         # Extract UUID from result text (format: "Created insight: uuid")
         return result[0].text.split(": ")[1]
     
@@ -44,7 +85,7 @@ class TestTemporalScoring:
         args = {
             "query": query,
             "situation_filter": situation_filter or [],
-            "limit": [0, 10],
+            "limit": {"offset": 0, "count": 10},
         }
         
         result = await self.server._search_insights(args)
@@ -123,7 +164,7 @@ class TestTemporalScoring:
         # Get baseline relevance
         results = await self.search_insights("reinforcement test")
         baseline_relevance = results["insights"][0]["relevance"]
-        baseline_importance = results["insights"][0]["importance"]
+        baseline_importance = results["insights"][0]["current_importance"]  # Use current_importance
         
         # Upvote the insight
         args = {"uuid": insight_uuid, "reinforce": "upvote"}
@@ -132,7 +173,7 @@ class TestTemporalScoring:
         # Check relevance after upvote
         results = await self.search_insights("reinforcement test")
         upvoted_relevance = results["insights"][0]["relevance"]
-        upvoted_importance = results["insights"][0]["importance"]
+        upvoted_importance = results["insights"][0]["current_importance"]  # Use current_importance
         
         # Create another insight to test downvote
         downvote_uuid = await self.create_insight("downvote test", importance=0.5)
@@ -144,15 +185,18 @@ class TestTemporalScoring:
         # Check relevance after downvote
         results = await self.search_insights("downvote test")
         downvoted_relevance = results["insights"][0]["relevance"]
-        downvoted_importance = results["insights"][0]["importance"]
+        downvoted_importance = results["insights"][0]["current_importance"]  # Use current_importance
         
         print(f"Baseline: relevance={baseline_relevance:.3f}, importance={baseline_importance:.3f}")
         print(f"Upvoted: relevance={upvoted_relevance:.3f}, importance={upvoted_importance:.3f}")
         print(f"Downvoted: relevance={downvoted_relevance:.3f}, importance={downvoted_importance:.3f}")
         
-        # Verify reinforcement effects
-        assert upvoted_importance == min(1.0, baseline_importance * UPVOTE_MULTIPLIER)
-        assert downvoted_importance == baseline_importance * DOWNVOTE_MULTIPLIER
+        # Verify reinforcement effects (with floating point tolerance)
+        expected_upvoted = min(1.0, baseline_importance * UPVOTE_MULTIPLIER)
+        expected_downvoted = baseline_importance * DOWNVOTE_MULTIPLIER
+        
+        assert abs(upvoted_importance - expected_upvoted) < 0.001
+        assert abs(downvoted_importance - expected_downvoted) < 0.001
         assert upvoted_relevance > baseline_relevance
         assert downvoted_relevance < baseline_relevance
     
