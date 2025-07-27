@@ -25,8 +25,8 @@ class TestTimeController:
         # 💡: Advance active day counter to simulate passage of time
         # This affects recency and frequency calculations without requiring
         # actual time to pass during tests
-        self.storage.advance_active_day(days)
-        return self.storage.get_current_active_day()
+        self.storage.active_day_counter += days
+        return self.storage.active_day_counter
     
     def set_day(self, day: int) -> int:
         """
@@ -38,12 +38,12 @@ class TestTimeController:
         Returns:
             New current active day
         """
-        self.storage.current_active_day = day
+        self.storage.active_day_counter = day
         return day
     
     def get_current_day(self) -> int:
         """Get the current active day."""
-        return self.storage.get_current_active_day()
+        return self.storage.active_day_counter
     
     def reset_to_day_one(self) -> int:
         """Reset time back to day 1."""

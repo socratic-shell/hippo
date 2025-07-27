@@ -5,8 +5,7 @@ from __future__ import annotations
 from typing import List, Optional
 from uuid import UUID
 
-from .models import Insight
-from .storage import HippoStorage
+from .models import Insight, HippoStorage
 
 
 class InMemoryStorage(HippoStorage):
@@ -15,8 +14,12 @@ class InMemoryStorage(HippoStorage):
     def __init__(self, initial_active_day: int = 1):
         """Initialize with empty insights and controllable active day."""
         # 💡: Start with day 1 rather than 0 to make test scenarios more intuitive
-        self.insights: List[Insight] = []
-        self.current_active_day = initial_active_day
+        # Call parent constructor with proper Pydantic initialization
+        super().__init__(
+            insights=[],
+            active_day_counter=initial_active_day,
+            last_calendar_date_used=None
+        )
     
     async def load_insights(self) -> List[Insight]:
         """Return current insights list."""
@@ -26,11 +29,11 @@ class InMemoryStorage(HippoStorage):
         """Update the insights list."""
         self.insights = insights.copy()
     
-    async def add_insight(self, insight: Insight) -> None:
+    def add_insight(self, insight: Insight) -> None:
         """Add a new insight to the list."""
         self.insights.append(insight)
     
-    async def update_insight(self, updated_insight: Insight) -> None:
+    def update_insight(self, updated_insight: Insight) -> None:
         """Update an existing insight by UUID."""
         for i, insight in enumerate(self.insights):
             if insight.uuid == updated_insight.uuid:
@@ -38,7 +41,7 @@ class InMemoryStorage(HippoStorage):
                 return
         raise ValueError(f"Insight with UUID {updated_insight.uuid} not found")
     
-    async def get_insight_by_uuid(self, uuid: UUID) -> Optional[Insight]:
+    def get_insight_by_uuid(self, uuid: UUID) -> Optional[Insight]:
         """Get insight by UUID."""
         for insight in self.insights:
             if insight.uuid == uuid:
@@ -47,12 +50,12 @@ class InMemoryStorage(HippoStorage):
     
     def get_current_active_day(self) -> int:
         """Return the current active day counter."""
-        return self.current_active_day
+        return self.active_day_counter
     
     def advance_active_day(self, days: int = 1) -> None:
         """Advance the active day counter (for testing)."""
-        self.current_active_day += days
+        self.active_day_counter += days
     
-    async def get_all_insights(self) -> List[Insight]:
+    def get_all_insights(self) -> List[Insight]:
         """Return all insights."""
         return self.insights.copy()
