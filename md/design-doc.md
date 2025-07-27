@@ -4,9 +4,15 @@
 
 ## Core Hypothesis
 
-**Can AI-generated insights + reinforcement learning actually surface more valuable knowledge than traditional memory systems?**
+**Can AI-generated insights + reinforcement learning + embracing messiness actually surface more valuable knowledge than traditional structured memory systems?**
 
-The key insight: Generate insights cheaply and frequently, let natural selection through reinforcement determine what survives.
+The key insights: 
+- **Generate insights cheaply and frequently** - let AI create many insights without perfect organization
+- **Let natural selection through reinforcement determine what survives** - user feedback shapes what becomes prominent
+- **Embrace the mess** - don't try to create highly structured taxonomies or perfect categorization
+- **Trust temporal scoring** - let time, usage patterns, and reinforcement naturally organize knowledge
+
+This approach contrasts with traditional knowledge management that emphasizes upfront structure, careful categorization, and manual curation. Instead, Hippo bets that organic emergence through usage patterns can be more effective than imposed structure.
 
 ## MVP Scope
 
@@ -134,6 +140,25 @@ Core parameters that tune the temporal scoring behavior:
 - **Relevance weights**: 30% recency, 20% frequency, 35% importance, 15% context
 - **Match thresholds**: 0.4 for content and situation relevance
 - **Maximum reasonable frequency**: 10 accesses per day (for normalization)
+
+## Philosophy: Embracing Messiness
+
+Traditional knowledge management systems emphasize structure: taxonomies, categories, tags, hierarchies. Hippo takes the opposite approach - **embrace the mess** and let value emerge organically.
+
+**Why Embrace Messiness:**
+- **Cognitive overhead**: Structured systems require constant categorization decisions
+- **Premature optimization**: We often don't know what will be valuable until later
+- **Natural emergence**: Usage patterns reveal value better than upfront planning
+- **Reduced friction**: No need to "file" insights perfectly before storing them
+
+**How Messiness Works in Hippo:**
+- **Situational context** instead of rigid categories - insights tagged with when/where they occurred
+- **Fuzzy matching** - "debugging React" can surface "debugging authentication" insights  
+- **Temporal scoring** - let time and usage naturally separate wheat from chaff
+- **Reinforcement learning** - user feedback shapes what becomes prominent over time
+
+The bet: A messy system with good search and temporal scoring will outperform a perfectly organized system that's too expensive to maintain.
+
 ## Implementation Architecture
 
 ### MCP Server Interface
