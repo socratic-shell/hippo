@@ -21,9 +21,15 @@ from .storage import JsonStorage
 class HippoServer:
     """MCP server for Hippo insight management."""
     
-    def __init__(self, storage_path: Path) -> None:
-        """Initialize server with storage path."""
-        self.storage = JsonStorage(storage_path)
+    def __init__(self, storage_path: Optional[Path] = None, *, storage = None) -> None:
+        """Initialize server with either storage path or storage instance."""
+        if storage is not None:
+            self.storage = storage
+        elif storage_path is not None:
+            self.storage = JsonStorage(storage_path)
+        else:
+            raise ValueError("Must provide either storage_path or storage")
+            
         self.searcher = InsightSearcher()
         self.server = Server("hippo")
         

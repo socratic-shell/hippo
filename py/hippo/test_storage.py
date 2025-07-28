@@ -21,6 +21,14 @@ class InMemoryStorage(HippoStorage):
             last_calendar_date_used=None
         )
     
+    async def load(self):
+        """Return self for compatibility with JsonStorage interface."""
+        return self
+    
+    async def save(self):
+        """No-op for in-memory storage."""
+        pass
+    
     async def load_insights(self) -> List[Insight]:
         """Return current insights list."""
         return self.insights.copy()

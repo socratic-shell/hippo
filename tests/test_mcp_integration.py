@@ -10,11 +10,11 @@ from hippo.server import HippoServer
 
 @pytest.mark.asyncio
 async def test_record_and_search_insight():
-    """Test basic record and search functionality."""
-    # Create temporary storage
+    """Test basic record and search functionality with file storage."""
+    # Create temporary storage for file-based testing
     with tempfile.TemporaryDirectory() as temp_dir:
         storage_path = Path(temp_dir) / "hippo.json"
-        server = HippoServer(storage_path)
+        server = HippoServer(storage_path=storage_path)
         
         # Record an insight
         record_result = await server._record_insight({
