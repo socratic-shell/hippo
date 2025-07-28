@@ -1,0 +1,86 @@
+{
+  "insights": [
+    {
+      "uuid": "d7a7227f-ceda-451c-bf8b-b5c7b4ae1fef",
+      "content": "User discovered the Hippo memory system and expressed excitement about its capabilities. This represents their first direct interaction with the memory recording functionality, showing interest in how AI can maintain context across conversations.",
+      "situation": [
+        "user discovering hippo memory system",
+        "first interaction with memory recording",
+        "demonstrating hippo capabilities",
+        "AI memory system introduction"
+      ],
+      "importance": 0.6,
+      "created_at": "2025-07-28T18:57:08.443580Z",
+      "content_last_modified_at": "2025-07-28T18:57:08.443580Z",
+      "importance_last_modified_at": "2025-07-28T18:57:08.443580Z",
+      "daily_access_counts": [
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "uuid": "defb6511-8124-4439-8413-b74755394cc3",
+      "content": "User wants to experiment with the Hippo memory system to understand how it feels over time. This reflects an empirical, experience-based approach to evaluating the system's effectiveness - learning through actual usage rather than theoretical analysis.",
+      "situation": [
+        "experimenting with hippo system",
+        "user expressing curiosity about long-term usage",
+        "iterative development approach",
+        "learning through experience"
+      ],
+      "importance": 0.5,
+      "created_at": "2025-07-28T18:57:54.408237Z",
+      "content_last_modified_at": "2025-07-28T18:57:54.408237Z",
+      "importance_last_modified_at": "2025-07-28T18:57:54.408237Z",
+      "daily_access_counts": [
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "uuid": "1f3400d0-8116-428e-9bce-754843b20d07",
+      "content": "Modified Hippo server logging configuration to only show ERROR level and above when HIPPO_LOG environment variable is not set. This reduces noise in normal operation while still allowing full DEBUG logging when HIPPO_LOG is set to a file path.",
+      "situation": [
+        "adjusting hippo logging configuration",
+        "reducing log noise in normal operation",
+        "environment variable controlled logging",
+        "MCP server debugging setup"
+      ],
+      "importance": 0.6,
+      "created_at": "2025-07-28T19:04:47.289944Z",
+      "content_last_modified_at": "2025-07-28T19:04:47.289944Z",
+      "importance_last_modified_at": "2025-07-28T19:04:47.289944Z",
+      "daily_access_counts": [
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "uuid": "dbed070c-c62f-4463-8c40-49dea5f80960",
+      "content": "Checkpointing Hippo development work including: 1) Modified logging configuration to only show ERROR level by default unless HIPPO_LOG is set, 2) Updated installation.md with better Q CLI command format and debugging instructions, 3) Updated SUMMARY.md to reference the new installation.md file, 4) Added data directory with test files.",
+      "situation": [
+        "checkpointing hippo development work",
+        "logging configuration changes",
+        "installation documentation updates",
+        "git commit preparation"
+      ],
+      "importance": 0.5,
+      "created_at": "2025-07-28T19:29:28.226389Z",
+      "content_last_modified_at": "2025-07-28T19:29:28.226389Z",
+      "importance_last_modified_at": "2025-07-28T19:29:28.226389Z",
+      "daily_access_counts": [
+        [
+          1,
+          1
+        ]
+      ]
+    }
+  ],
+  "active_day_counter": 1,
+  "last_calendar_date_used": "2025-07-28"
+}

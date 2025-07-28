@@ -4,8 +4,7 @@
 
 # User's guide
 
-- [How to Use It](./how-to-use.md)
-- [MCP Server Setup](./mcp-setup.md)
+- [Installation](./installation.md)
 - [Docker Usage](./docker.md)
 
 # Design and implementation (for contributors)

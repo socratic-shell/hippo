@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from uuid import UUID
@@ -17,31 +19,69 @@ from .models import Insight
 from .search import InsightSearcher
 from .storage import JsonStorage
 
+# 💡: Adding comprehensive logging for MCP server debugging
+# MCP servers run in stdio mode which makes debugging tricky - we need
+# to log to stderr to avoid interfering with the MCP protocol on stdout
+# Check for HIPPO_LOG environment variable to optionally log to file
+# If HIPPO_LOG is not set, only log ERROR and above to minimize noise
+import os
+
+log_file = os.environ.get('HIPPO_LOG')
+if log_file:
+    # Log to file if HIPPO_LOG is set - use DEBUG level for full debugging
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        filename=log_file,
+        filemode='a'  # Append mode
+    )
+else:
+    # Default to stderr with ERROR level only to minimize noise
+    logging.basicConfig(
+        level=logging.ERROR,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        stream=sys.stderr
+    )
+
+logger = logging.getLogger(__name__)
+
 
 class HippoServer:
     """MCP server for Hippo insight management."""
     
     def __init__(self, storage_path: Optional[Path] = None, *, storage = None) -> None:
         """Initialize server with either storage path or storage instance."""
+        logger.info("Initializing HippoServer...")
+        
         if storage is not None:
+            logger.debug("Using provided storage instance")
             self.storage = storage
         elif storage_path is not None:
+            logger.info(f"Creating JsonStorage with path: {storage_path}")
             self.storage = JsonStorage(storage_path)
         else:
+            logger.error("No storage path or storage instance provided")
             raise ValueError("Must provide either storage_path or storage")
             
+        logger.debug("Initializing InsightSearcher...")
         self.searcher = InsightSearcher()
+        
+        logger.debug("Creating MCP Server instance...")
         self.server = Server("hippo")
         
+        logger.info("Registering MCP tools...")
         # Register MCP tools
         self._register_tools()
+        logger.info("HippoServer initialization complete")
     
     def _register_tools(self) -> None:
         """Register all MCP tools."""
+        logger.debug("Starting tool registration...")
         
         @self.server.list_tools()
         async def list_tools() -> List[Tool]:
             """List available tools."""
+            logger.debug("list_tools called")
             return [
                 Tool(
                     name="hippo_record_insight",
@@ -194,17 +234,28 @@ class HippoServer:
         @self.server.call_tool()
         async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             """Handle tool calls."""
+            logger.info(f"Tool called: {name} with arguments: {arguments}")
             
-            if name == "hippo_record_insight":
-                return await self._record_insight(arguments)
-            elif name == "hippo_search_insights":
-                return await self._search_insights(arguments)
-            elif name == "hippo_modify_insight":
-                return await self._modify_insight(arguments)
-            elif name == "hippo_reinforce_insight":
-                return await self._reinforce_insight(arguments)
-            else:
-                return [TextContent(type="text", text=f"Unknown tool: {name}")]
+            try:
+                if name == "hippo_record_insight":
+                    logger.debug("Calling _record_insight")
+                    return await self._record_insight(arguments)
+                elif name == "hippo_search_insights":
+                    logger.debug("Calling _search_insights")
+                    return await self._search_insights(arguments)
+                elif name == "hippo_modify_insight":
+                    logger.debug("Calling _modify_insight")
+                    return await self._modify_insight(arguments)
+                elif name == "hippo_reinforce_insight":
+                    logger.debug("Calling _reinforce_insight")
+                    return await self._reinforce_insight(arguments)
+                else:
+                    logger.warning(f"Unknown tool called: {name}")
+                    return [TextContent(type="text", text=f"Unknown tool: {name}")]
+                    
+            except Exception as e:
+                logger.error(f"Error in tool {name}: {e}", exc_info=True)
+                return [TextContent(type="text", text=f"Error in {name}: {str(e)}")]
     
     async def _record_insight(self, args: Dict[str, Any]) -> List[TextContent]:
         """Record a new insight."""
@@ -370,8 +421,17 @@ class HippoServer:
     
     async def run(self) -> None:
         """Run the MCP server."""
-        async with stdio_server() as (read_stream, write_stream):
-            await self.server.run(read_stream, write_stream, {})
+        logger.info("Starting MCP server...")
+        try:
+            # 💡: Using create_initialization_options() like the official examples
+            # This sets up proper server capabilities and initialization parameters
+            options = self.server.create_initialization_options()
+            async with stdio_server() as (read_stream, write_stream):
+                logger.info("MCP server connected, entering main loop...")
+                await self.server.run(read_stream, write_stream, options, raise_exceptions=True)
+        except Exception as e:
+            logger.error(f"Error running MCP server: {e}")
+            raise
 
 
 @click.command()
@@ -383,8 +443,21 @@ class HippoServer:
 )
 def main(hippo_file: Path) -> None:
     """Run the Hippo MCP server."""
-    server = HippoServer(hippo_file)
-    asyncio.run(server.run())
+    log_destination = os.environ.get('HIPPO_LOG', 'stderr')
+    logger.info(f"Starting Hippo MCP server with storage file: {hippo_file}")
+    logger.info(f"Logging to: {log_destination}")
+    
+    try:
+        # Ensure the parent directory exists
+        hippo_file.parent.mkdir(parents=True, exist_ok=True)
+        logger.debug(f"Ensured parent directory exists: {hippo_file.parent}")
+        
+        server = HippoServer(hippo_file)
+        logger.info("Server created successfully, starting asyncio loop...")
+        asyncio.run(server.run())
+    except Exception as e:
+        logger.error(f"Failed to start server: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
