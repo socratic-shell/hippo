@@ -1,12 +1,19 @@
 # Summary
 
 - [Introduction](./introduction.md)
+
+# User's guide
+
 - [How to Use It](./how-to-use.md)
 - [MCP Server Setup](./mcp-setup.md)
 - [Docker Usage](./docker.md)
-- [Design Document](./design-doc.md)
-- [Example Dialog](./example-dialog.md)
-- [Delegate Experiment](./experiment-dialog.md)
+
+# Design and implementation (for contributors)
+
+- [Design Document](./design/design-doc.md)
+    - [Example Dialog](./design/example-dialog.md)
+    - [Delegate Experiment](./design/experiment-dialog.md)
+- [Testing strategy](./design/testing-strategy.md)
 
 # Appendices
 

@@ -4,10 +4,10 @@ import asyncio
 import math
 from typing import Dict, Any
 
-from py.hippo.server import HippoServer
-from py.hippo.test_storage import InMemoryStorage
-from py.hippo.test_time import TestTimeController
-from py.hippo.constants import (
+from hippo.server import HippoServer
+from hippo.test_storage import InMemoryStorage
+from hippo.test_time import TestTimeController
+from hippo.constants import (
     RECENCY_DECAY_RATE,
     FREQUENCY_WINDOW_DAYS,
     UPVOTE_MULTIPLIER,

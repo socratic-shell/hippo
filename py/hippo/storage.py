@@ -57,7 +57,6 @@ class JsonStorage:
         async with aiofiles.open(temp_path, 'w') as f:
             json_data = self._data.model_dump_json(
                 indent=2,
-                mode='json',
                 by_alias=False,
             )
             await f.write(json_data)
