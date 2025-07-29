@@ -3,17 +3,29 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import tempfile
 import threading
+import time
 from datetime import date
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 from uuid import UUID
 
 import aiofiles
+from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
 
 from .models import HippoStorage, Insight
+
+logger = logging.getLogger(__name__)
+
+# 💡: Cache refresh interval - can be tuned based on consistency vs performance needs
+CACHE_REFRESH_INTERVAL_SECONDS = 30
+
+# 💡: Debounce window for file events to avoid excessive cache rebuilds during rapid changes
+FILE_EVENT_DEBOUNCE_SECONDS = 1.0
 
 
 class FileBasedStorage:
@@ -27,12 +39,13 @@ class FileBasedStorage:
     - UUID-based filename validation
     """
     
-    def __init__(self, directory_path: Path) -> None:
+    def __init__(self, directory_path: Path, enable_watching: bool = True) -> None:
         """
         Initialize file-based storage.
         
         Args:
             directory_path: Directory to store insight files and metadata
+            enable_watching: Whether to enable file watching for cross-process sync
         """
         self.directory_path = directory_path
         self.insights_dir = directory_path / "insights"
@@ -47,8 +60,27 @@ class FileBasedStorage:
         # Metadata cache (active day counter, etc.)
         self._metadata_cache: Optional[Dict] = None
         
+        # File watching infrastructure
+        # 💡: Track UUIDs we just wrote to avoid refreshing cache on our own changes
+        self._recently_written_uuids: Set[str] = set()
+        self._recently_written_lock = threading.Lock()
+        
+        # 💡: Debouncing for file events to prevent excessive cache rebuilds
+        self._debounce_timer: Optional[threading.Timer] = None
+        self._debounce_lock = threading.Lock()
+        
+        # File watcher components
+        self._observer: Optional[Observer] = None
+        self._periodic_timer: Optional[threading.Timer] = None
+        self._shutdown_requested = False
+        self._watching_enabled = enable_watching
+        
         # Ensure directories exist
         self.insights_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Start file watching if enabled
+        if enable_watching:
+            self._start_file_watching()
     
     def _validate_uuid_filename(self, uuid_str: str) -> bool:
         """
@@ -143,37 +175,17 @@ class FileBasedStorage:
         await self._atomic_write_json(self.metadata_file, self._metadata_cache)
     
     async def _load_insights_cache(self) -> None:
-        """Load all insights from disk into memory cache."""
+        """
+        Load all insights from disk into memory cache.
+        
+        💡: Now delegates to the refresh mechanism for consistency with file watching
+        """
         with self._cache_lock:
             if self._cache_loaded:
                 return
             
-            self._insights_cache.clear()
-            
-            # Scan insights directory for JSON files
-            if not self.insights_dir.exists():
-                self._cache_loaded = True
-                return
-            
-            for file_path in self.insights_dir.glob("*.json"):
-                uuid_str = file_path.stem
-                
-                # Validate filename is a UUID
-                if not self._validate_uuid_filename(uuid_str):
-                    continue
-                
-                try:
-                    async with aiofiles.open(file_path, 'r') as f:
-                        content = await f.read()
-                        insight_data = json.loads(content)
-                        insight = Insight.model_validate(insight_data)
-                        self._insights_cache[uuid_str] = insight
-                except (json.JSONDecodeError, ValueError, OSError) as e:
-                    # Skip corrupted files but log the issue
-                    # In a production system, we might want proper logging here
-                    continue
-            
-            self._cache_loaded = True
+            # Use the same refresh logic as file watching for consistency
+            self._refresh_cache_from_disk()
     
     async def get_insight(self, uuid: UUID) -> Optional[Insight]:
         """
@@ -204,6 +216,9 @@ class FileBasedStorage:
         
         uuid_str = str(insight.uuid)
         file_path = self._get_insight_path(insight.uuid)
+        
+        # Mark as written to avoid unnecessary cache refresh on our own change
+        self._mark_uuid_as_written(uuid_str)
         
         # Write to disk atomically
         insight_data = insight.model_dump(mode='json')
@@ -267,6 +282,9 @@ class FileBasedStorage:
             
             # Remove from cache
             del self._insights_cache[uuid_str]
+        
+        # Mark as written to avoid unnecessary cache refresh on our own change
+        self._mark_uuid_as_written(uuid_str)
         
         # Remove file if it exists
         try:
@@ -395,3 +413,209 @@ class FileBasedStorage:
     async def add_insight(self, insight: Insight) -> None:
         """Add an insight for compatibility with JsonStorage interface."""
         await self.store_insight(insight)
+    
+    def _start_file_watching(self) -> None:
+        """
+        Start file watching with both event-based and periodic refresh.
+        
+        💡: Uses hybrid approach - watchdog for fast updates plus periodic safety net
+        to handle missed events as documented in file-watching-event-drop.md
+        """
+        try:
+            # Create event handler
+            event_handler = _InsightFileEventHandler(self)
+            
+            # Start watchdog observer
+            self._observer = Observer()
+            self._observer.schedule(
+                event_handler,
+                str(self.insights_dir),
+                recursive=False
+            )
+            self._observer.start()
+            logger.debug(f"Started file watching on {self.insights_dir}")
+            
+            # Start periodic refresh timer
+            self._schedule_periodic_refresh()
+            
+        except Exception as e:
+            # 💡: If file watching fails, continue without it - the system will still work
+            # but won't get cross-process updates until periodic refresh
+            logger.warning(f"Failed to start file watching, continuing without real-time updates: {e}", exc_info=True)
+    
+    def _schedule_periodic_refresh(self) -> None:
+        """Schedule the next periodic cache refresh."""
+        if self._shutdown_requested:
+            return
+            
+        self._periodic_timer = threading.Timer(
+            CACHE_REFRESH_INTERVAL_SECONDS,
+            self._periodic_refresh_callback
+        )
+        self._periodic_timer.start()
+    
+    def _periodic_refresh_callback(self) -> None:
+        """Callback for periodic cache refresh timer."""
+        try:
+            self._refresh_cache_from_disk()
+        except Exception as e:
+            logger.warning(f"Periodic cache refresh failed: {e}", exc_info=True)
+        finally:
+            # Schedule next refresh
+            self._schedule_periodic_refresh()
+    
+    def _on_file_event(self, file_path: str) -> None:
+        """
+        Handle file system events with debouncing.
+        
+        Args:
+            file_path: Path to the file that changed
+        """
+        # Extract UUID from filename
+        uuid_str = Path(file_path).stem
+        
+        # Check if this is our own change
+        with self._recently_written_lock:
+            if uuid_str in self._recently_written_uuids:
+                self._recently_written_uuids.discard(uuid_str)
+                return  # Skip refresh for our own changes
+        
+        # Debounce the refresh to avoid excessive rebuilds
+        with self._debounce_lock:
+            if self._debounce_timer is not None:
+                self._debounce_timer.cancel()
+            
+            self._debounce_timer = threading.Timer(
+                FILE_EVENT_DEBOUNCE_SECONDS,
+                self._debounced_refresh_callback
+            )
+            self._debounce_timer.start()
+    
+    def _debounced_refresh_callback(self) -> None:
+        """Callback for debounced cache refresh."""
+        try:
+            self._refresh_cache_from_disk()
+        except Exception as e:
+            logger.warning(f"Debounced cache refresh failed: {e}", exc_info=True)
+    
+    def _refresh_cache_from_disk(self) -> None:
+        """
+        Refresh the entire cache by scanning the filesystem.
+        
+        💡: This is our core cache refresh operation - rebuilds everything from disk
+        to handle missed events and ensure consistency across processes.
+        """
+        with self._cache_lock:
+            try:
+                # Clear current cache
+                old_cache = self._insights_cache.copy()
+                self._insights_cache.clear()
+                
+                # Scan insights directory for JSON files
+                if not self.insights_dir.exists():
+                    self._cache_loaded = True
+                    logger.debug("Insights directory does not exist, cache refresh complete")
+                    return
+                
+                loaded_count = 0
+                skipped_count = 0
+                
+                for file_path in self.insights_dir.glob("*.json"):
+                    uuid_str = file_path.stem
+                    
+                    # Validate UUID format
+                    if not self._validate_uuid_filename(uuid_str):
+                        logger.debug(f"Skipping file with invalid UUID filename: {file_path.name}")
+                        skipped_count += 1
+                        continue
+                    
+                    try:
+                        # Load insight from file
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            insight_data = json.load(f)
+                        
+                        # Convert to Insight object
+                        insight = Insight.model_validate(insight_data)
+                        self._insights_cache[uuid_str] = insight
+                        loaded_count += 1
+                        
+                    except (json.JSONDecodeError, ValueError, OSError) as e:
+                        # 💡: Skip corrupted files rather than failing entirely
+                        logger.warning(f"Failed to load insight from {file_path}: {e}")
+                        skipped_count += 1
+                        continue
+                
+                self._cache_loaded = True
+                logger.debug(f"Cache refresh complete: loaded {loaded_count} insights, skipped {skipped_count} files")
+                
+            except Exception as e:
+                # 💡: If refresh fails completely, restore old cache to maintain service
+                logger.error(f"Cache refresh failed completely, keeping old cache: {e}", exc_info=True)
+                self._insights_cache = old_cache
+    
+    def _mark_uuid_as_written(self, uuid_str: str) -> None:
+        """
+        Mark a UUID as recently written by us to avoid unnecessary cache refresh.
+        
+        Args:
+            uuid_str: UUID that we just wrote
+        """
+        with self._recently_written_lock:
+            self._recently_written_uuids.add(uuid_str)
+    
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - ensures proper cleanup."""
+        self.shutdown()
+        return False  # Don't suppress exceptions
+    
+    def shutdown(self) -> None:
+        """
+        Gracefully shutdown file watching components.
+        
+        💡: Important to call this to avoid resource leaks and background threads
+        """
+        self._shutdown_requested = True
+        
+        # Stop watchdog observer
+        if self._observer and self._observer.is_alive():
+            self._observer.stop()
+            self._observer.join(timeout=5)
+        
+        # Cancel timers
+        with self._debounce_lock:
+            if self._debounce_timer:
+                self._debounce_timer.cancel()
+        
+        if self._periodic_timer:
+            self._periodic_timer.cancel()
+
+
+class _InsightFileEventHandler(FileSystemEventHandler):
+    """
+    File system event handler for insight JSON files.
+    
+    💡: Separate class to keep event handling logic isolated and testable
+    """
+    
+    def __init__(self, storage: FileBasedStorage):
+        super().__init__()
+        self.storage = storage
+    
+    def on_created(self, event):
+        """Handle file creation events."""
+        if not event.is_directory and event.src_path.endswith('.json'):
+            self.storage._on_file_event(event.src_path)
+    
+    def on_modified(self, event):
+        """Handle file modification events."""
+        if not event.is_directory and event.src_path.endswith('.json'):
+            self.storage._on_file_event(event.src_path)
+    
+    def on_deleted(self, event):
+        """Handle file deletion events."""
+        if not event.is_directory and event.src_path.endswith('.json'):
+            self.storage._on_file_event(event.src_path)

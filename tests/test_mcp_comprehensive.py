@@ -3,8 +3,7 @@
 import pytest
 
 from hippo.server import HippoServer
-from hippo.test_storage import InMemoryStorage
-from hippo.test_time import TestTimeController
+from hippo.mocks import InMemoryStorage, TimeController
 
 
 @pytest.mark.asyncio
@@ -84,7 +83,7 @@ async def test_temporal_scoring_and_storage():
     """Test temporal scoring behavior and storage persistence."""
     # Create server with controlled time environment
     storage = InMemoryStorage(initial_active_day=1)
-    time_controller = TestTimeController(storage)
+    time_controller = TimeController(storage)
     server = HippoServer(storage=storage)
     
     # Record an insight on day 1

@@ -5,8 +5,7 @@ import math
 from typing import Dict, Any
 
 from hippo.server import HippoServer
-from hippo.test_storage import InMemoryStorage
-from hippo.test_time import TestTimeController
+from hippo.mocks import InMemoryStorage, TimeController
 from hippo.constants import (
     RECENCY_DECAY_RATE,
     FREQUENCY_WINDOW_DAYS,
@@ -63,7 +62,7 @@ class TestTemporalScoring:
         # We need to create a wrapper that has the same interface as JsonStorage
         self.server.storage = TestStorageWrapper(self.storage)
         
-        self.time_ctrl = TestTimeController(self.storage)
+        self.time_ctrl = TimeController(self.storage)
     
     async def create_insight(self, content: str, situation: list = None, importance: float = 0.8) -> str:
         """Helper to create insight and return UUID."""

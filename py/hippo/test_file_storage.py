@@ -13,15 +13,16 @@ async def test_basic_operations():
     """Test basic CRUD operations with FileBasedStorage."""
     
     with tempfile.TemporaryDirectory() as temp_dir:
-        storage = FileBasedStorage(Path(temp_dir))
-        
-        # Create a test insight
-        insight = Insight.create(
-            content="Test insight content",
-            situation=["testing", "file storage"],
-            importance=0.8,
-            current_active_day=1
-        )
+        # 💡: Disable file watching in tests to avoid background threads
+        with FileBasedStorage(Path(temp_dir), enable_watching=False) as storage:
+            
+            # Create a test insight
+            insight = Insight.create(
+                content="Test insight content",
+                situation=["testing", "file storage"],
+                importance=0.8,
+                current_active_day=1
+            )
         
         # Store the insight
         uuid_str = await storage.store_insight(insight)
@@ -79,14 +80,14 @@ async def test_active_day_tracking():
     """Test active day counter functionality."""
     
     with tempfile.TemporaryDirectory() as temp_dir:
-        storage = FileBasedStorage(Path(temp_dir))
-        
-        # First call should return 1
-        day1 = await storage.get_current_active_day()
-        assert day1 == 1
-        
-        # Same day should return same number
-        day1_again = await storage.get_current_active_day()
+        with FileBasedStorage(Path(temp_dir), enable_watching=False) as storage:
+            
+            # First call should return 1
+            day1 = await storage.get_current_active_day()
+            assert day1 == 1
+            
+            # Same day should return same number
+            day1_again = await storage.get_current_active_day()
         assert day1_again == 1
         
         print("✓ Active day tracking works")
@@ -97,15 +98,15 @@ async def test_file_structure():
     
     with tempfile.TemporaryDirectory() as temp_dir:
         storage_dir = Path(temp_dir)
-        storage = FileBasedStorage(storage_dir)
-        
-        # Create an insight
-        insight = Insight.create(
-            content="Test content",
-            situation=["test"],
-            importance=0.5,
-            current_active_day=1
-        )
+        with FileBasedStorage(storage_dir, enable_watching=False) as storage:
+            
+            # Create an insight
+            insight = Insight.create(
+                content="Test content",
+                situation=["test"],
+                importance=0.5,
+                current_active_day=1
+            )
         
         await storage.store_insight(insight)
         
@@ -125,8 +126,37 @@ async def test_file_structure():
         print("✓ File structure is correct")
 
 
+async def test_file_watching_enabled():
+    """Test that file watching can be enabled without hanging."""
+    
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # 💡: Test that file watching starts and shuts down cleanly
+        with FileBasedStorage(Path(temp_dir), enable_watching=True) as storage:
+            
+            # Create a test insight
+            insight = Insight.create(
+                content="Test with watching enabled",
+                situation=["testing", "file watching"],
+                importance=0.7,
+                current_active_day=1
+            )
+            
+            # Store and retrieve to ensure basic functionality works
+            uuid_str = await storage.store_insight(insight)
+            retrieved = await storage.get_insight(insight.uuid)
+            
+            assert retrieved is not None
+            assert retrieved.content == "Test with watching enabled"
+            
+        print("✓ File watching enabled/disabled cleanly")
+
+
 if __name__ == "__main__":
-    asyncio.run(test_basic_operations())
-    asyncio.run(test_active_day_tracking())
-    asyncio.run(test_file_structure())
-    print("All tests passed!")
+    async def run_tests():
+        await test_basic_operations()
+        await test_active_day_tracking() 
+        await test_file_structure()
+        await test_file_watching_enabled()
+        print("All tests passed!")
+    
+    asyncio.run(run_tests())
