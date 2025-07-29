@@ -15,9 +15,9 @@ from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
 from .constants import UPVOTE_MULTIPLIER, DOWNVOTE_MULTIPLIER
-from .models import Insight
+from .models import Insight, HippoStorage
 from .search import InsightSearcher
-from .storage import JsonStorage
+from .file_storage import FileBasedStorage
 
 # 💡: Adding comprehensive logging for MCP server debugging
 # MCP servers run in stdio mode which makes debugging tricky - we need
@@ -57,8 +57,8 @@ class HippoServer:
             logger.debug("Using provided storage instance")
             self.storage = storage
         elif storage_path is not None:
-            logger.info(f"Creating JsonStorage with path: {storage_path}")
-            self.storage = JsonStorage(storage_path)
+            logger.info(f"Creating FileBasedStorage with directory: {storage_path}")
+            self.storage = FileBasedStorage(storage_path)
         else:
             logger.error("No storage path or storage instance provided")
             raise ValueError("Must provide either storage_path or storage")
@@ -73,6 +73,16 @@ class HippoServer:
         # Register MCP tools
         self._register_tools()
         logger.info("HippoServer initialization complete")
+    
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - cleanup storage resources."""
+        if hasattr(self.storage, '__exit__'):
+            self.storage.__exit__(exc_type, exc_val, exc_tb)
+        return False  # Don't suppress exceptions
     
     def _register_tools(self) -> None:
         """Register all MCP tools."""
@@ -260,8 +270,7 @@ class HippoServer:
     async def _record_insight(self, args: Dict[str, Any]) -> List[TextContent]:
         """Record a new insight."""
         try:
-            storage_data = await self.storage.load()
-            current_active_day = storage_data.get_current_active_day()
+            current_active_day = await self.storage.get_current_active_day()
             
             insight = Insight.create(
                 content=args["content"],
@@ -269,8 +278,7 @@ class HippoServer:
                 importance=args["importance"],
                 current_active_day=current_active_day,
             )
-            storage_data.add_insight(insight)
-            await self.storage.save()
+            await self.storage.add_insight(insight)
             
             return [TextContent(
                 type="text",
@@ -297,7 +305,9 @@ class HippoServer:
                 relevance_range = (rr.get("min", 0.1), rr.get("max"))
             
             # Perform search
-            storage_data = await self.storage.load()
+            all_insights = await self.storage.get_all_insights()
+            # Create a temporary HippoStorage object for the searcher
+            storage_data = HippoStorage(insights=all_insights)
             results = self.searcher.search(
                 storage=storage_data,
                 query=query,
@@ -306,8 +316,9 @@ class HippoServer:
                 limit=limit,
             )
             
-            # Save storage after recording accesses
-            await self.storage.save()
+            # Record accesses for insights that were returned
+            for search_result in results.insights:
+                await self.storage.record_insight_access(search_result.insight.uuid)
             
             # Format results
             output = {
@@ -375,8 +386,8 @@ class HippoServer:
             elif reinforce == "downvote":
                 insight.apply_reinforcement(DOWNVOTE_MULTIPLIER)
             
-            # Save
-            await self.storage.update_insight(insight)
+            # Save the updated insight
+            await self.storage.store_insight(insight)
             
             return [TextContent(
                 type="text",
@@ -402,11 +413,11 @@ class HippoServer:
                 if insight.uuid in upvotes:
                     insight.apply_reinforcement(UPVOTE_MULTIPLIER)
                     modified.append(str(insight.uuid))
-                    await self.storage.update_insight(insight)
+                    await self.storage.store_insight(insight)
                 elif insight.uuid in downvotes:
                     insight.apply_reinforcement(DOWNVOTE_MULTIPLIER)
                     modified.append(str(insight.uuid))
-                    await self.storage.update_insight(insight)
+                    await self.storage.store_insight(insight)
             
             return [TextContent(
                 type="text",
@@ -439,7 +450,7 @@ class HippoServer:
     '--hippo-file',
     type=click.Path(path_type=Path),
     required=True,
-    help='Path to the hippo.json storage file'
+    help='Path to the hippo storage directory'
 )
 def main(hippo_file: Path) -> None:
     """Run the Hippo MCP server."""
