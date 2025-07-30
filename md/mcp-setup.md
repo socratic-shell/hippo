@@ -9,14 +9,15 @@ This guide shows you how to connect Hippo to your AI tool via the Model Context 
 Add Hippo to your Q CLI configuration:
 
 ```bash
-# Using uv (recommended)
-q configure add-server hippo "uv run --directory /path/to/hippo python -m py.hippo.server --hippo-file /path/to/hippo/data/hippo.json"
+# Create data directory
+mkdir -p ~/.hippo
 
-# Using Docker/Podman
-q configure add-server hippo "podman run --rm -i -v /path/to/hippo/data:/data:Z hippo-server uv run python -m py.hippo.server --hippo-file /data/hippo.json"
+# Add server (replace /path/to/hippo with your actual path)
+q configure add-server hippo "uv run --directory /path/to/hippo python -m hippo.server --hippo-file ~/.hippo/hippo.json"
+
+# Add guidance to global context
+q context add --global /path/to/hippo/guidance.md
 ```
-
-Replace `/path/to/hippo` with the actual path to your Hippo installation.
 
 ### For Claude Desktop
 
@@ -33,8 +34,8 @@ Add this to your Claude Desktop configuration file:
       "args": [
         "run", 
         "--directory", "/path/to/hippo",
-        "python", "-m", "py.hippo.server", 
-        "--hippo-file", "/path/to/hippo/data/hippo.json"
+        "python", "-m", "hippo.server", 
+        "--hippo-file", "~/.hippo/hippo.json"
       ]
     }
   }
@@ -52,7 +53,7 @@ Or using Docker:
         "run", "--rm", "-i",
         "-v", "/path/to/hippo/data:/data:Z",
         "hippo-server",
-        "uv", "run", "python", "-m", "py.hippo.server",
+        "uv", "run", "python", "-m", "hippo.server",
         "--hippo-file", "/data/hippo.json"
       ]
     }

@@ -4,13 +4,45 @@ An experiment in collaborative memory through reinforcement learning.
 
 Hippo is a memory system designed to let insights emerge organically through usage patterns. It supplies the LLM with tools to record insights and then later to indicate which ones are useful via up/down-voting (similar to reddit or stack overflow) and to make edits.
 
+## Prerequisites
+
+- **Python 3.10+**
+- **uv** (Python package manager) - Install from [uv installation guide](https://docs.astral.sh/uv/getting-started/installation/)
+
 ## Quick Start
 
-### Connect to Your AI Tool
+### 1. Clone and Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/socratic-shell/hippo.git
+cd hippo
+
+# Install dependencies
+uv sync
+
+# For development, also install dev tools (mypy, pytest, ruff)
+uv sync --extra dev
+
+# Test the installation
+uv run python -m hippo.server --help
+
+# Verify everything works
+./verify-install.sh
+```
+
+### 2. Connect to Your AI Tool
 
 **For Q CLI:**
 ```bash
-q configure add-server hippo "uv run --directory /path/to/hippo python -m py.hippo.server --hippo-file /path/to/hippo/data/hippo.json"
+# Create data directory
+mkdir -p ~/.hippo
+
+# Add server (replace /path/to/hippo with your actual path)
+q configure add-server hippo "uv run --directory /path/to/hippo python -m hippo.server --hippo-file ~/.hippo/hippo.json"
+
+# Add guidance to global context
+q context add --global /path/to/hippo/guidance.md
 ```
 
 **For Claude Desktop:** Add to `claude_desktop_config.json`:
@@ -19,15 +51,24 @@ q configure add-server hippo "uv run --directory /path/to/hippo python -m py.hip
   "mcpServers": {
     "hippo": {
       "command": "uv",
-      "args": ["run", "--directory", "/path/to/hippo", "python", "-m", "py.hippo.server", "--hippo-file", "/path/to/hippo/data/hippo.json"]
+      "args": [
+        "run", 
+        "--directory", 
+        "/path/to/hippo", 
+        "python", 
+        "-m", 
+        "hippo.server", 
+        "--hippo-file", 
+        "~/.hippo/hippo.json"
+      ]
     }
   }
 }
 ```
 
-See [MCP Server Setup](md/mcp-setup.md) for complete installation instructions.
+Then add `@/path/to/hippo/guidance.md` to your CLAUDE.md file.
 
-### Alternative: Docker/Podman
+### 3. Alternative: Docker/Podman
 
 ```bash
 # Build and run
@@ -36,32 +77,26 @@ mkdir -p ./data
 podman run -d --name hippo -p 8080:8080 -v ./data:/data:Z hippo-server
 ```
 
-### Using uv directly
-
-```bash
-# Install dependencies
-uv sync
-
-# Run the server
-uv run python -m py.hippo.server --hippo-file ./hippo.json
-```
-
 ## Documentation
 
 See the `md/` directory for comprehensive documentation:
 
-- [MCP Server Setup](md/mcp-setup.md) - **Connect Hippo to your AI tool**
+- [Installation Guide](md/installation.md) - **Complete setup instructions**
 - [Introduction](md/introduction.md) - What is Hippo and why
-- [How to Use It](md/how-to-use.md) - Usage guide for AI assistants
 - [Docker Usage](md/docker.md) - Container deployment guide
-- [Design Document](md/design-doc.md) - Deep concepts and philosophy
+- [Design Document](md/design/design-doc.md) - Deep concepts and philosophy
 
-## Testing
-
-Run the integration test suite:
+## Development
 
 ```bash
-uv run python -m tests.test_temporal_scoring
+# Run type checking
+uv run mypy py/hippo/
+
+# Run tests
+uv run pytest py/hippo/
+
+# Run the server locally
+uv run python -m hippo.server --hippo-file ./test-data.json
 ```
 
 ## Status
