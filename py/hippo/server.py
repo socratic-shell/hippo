@@ -89,7 +89,7 @@ class HippoServer:
         """Register all MCP tools."""
         logger.debug("Starting tool registration...")
         
-        @self.server.list_tools()
+        @self.server.list_tools()  # type: ignore[misc,no-untyped-call]
         async def list_tools() -> List[Tool]:
             """List available tools."""
             logger.debug("list_tools called")
@@ -242,7 +242,7 @@ class HippoServer:
                 ),
             ]
         
-        @self.server.call_tool()
+        @self.server.call_tool()  # type: ignore[misc,no-untyped-call]
         async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             """Handle tool calls."""
             logger.info(f"Tool called: {name} with arguments: {arguments}")
