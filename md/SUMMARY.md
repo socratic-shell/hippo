@@ -5,7 +5,6 @@
 # User's guide
 
 - [Installation](./installation.md)
-- [Docker Usage](./docker.md)
 
 # Design and implementation (for contributors)
 

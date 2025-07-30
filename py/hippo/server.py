@@ -449,23 +449,23 @@ class HippoServer:
 
 @click.command()
 @click.option(
-    '--hippo-file',
+    '--memory-dir',
     type=click.Path(path_type=Path),
     required=True,
     help='Path to the hippo storage directory'
 )
-def main(hippo_file: Path) -> None:
+def main(memory_dir: Path) -> None:
     """Run the Hippo MCP server."""
     log_destination = os.environ.get('HIPPO_LOG', 'stderr')
-    logger.info(f"Starting Hippo MCP server with storage file: {hippo_file}")
+    logger.info(f"Starting Hippo MCP server with storage directory: {memory_dir}")
     logger.info(f"Logging to: {log_destination}")
     
     try:
         # Ensure the parent directory exists
-        hippo_file.parent.mkdir(parents=True, exist_ok=True)
-        logger.debug(f"Ensured parent directory exists: {hippo_file.parent}")
+        memory_dir.parent.mkdir(parents=True, exist_ok=True)
+        logger.debug(f"Ensured parent directory exists: {memory_dir.parent}")
         
-        server = HippoServer(hippo_file)
+        server = HippoServer(memory_dir)
         logger.info("Server created successfully, starting asyncio loop...")
         asyncio.run(server.run())
     except Exception as e:

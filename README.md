@@ -37,7 +37,7 @@ For Q CLI users, use the automated setup script:
 python setup-dev.py
 
 # Custom memory location
-python setup-dev.py --memory-path ~/my-project/hippo-memories.json
+python setup-dev.py --memory-dir ~/my-project/hippo-memories
 
 # See all options
 python setup-dev.py --help
@@ -65,8 +65,8 @@ q mcp add \
   --args python \
   --args -m \
   --args hippo.server \
-  --args --hippo-file \
-  --args ~/.hippo/hippo.json \
+  --args --memory-dir \
+  --args ~/.hippo \
   --scope global
 
 # Add guidance to your CLAUDE.md or global context
@@ -86,8 +86,8 @@ q mcp add \
         "python", 
         "-m", 
         "hippo.server", 
-        "--hippo-file", 
-        "~/.hippo/hippo.json"
+        "--memory-dir", 
+        "~/.hippo"
       ]
     }
   }
@@ -124,7 +124,7 @@ uv run mypy py/hippo/
 uv run pytest py/hippo/
 
 # Run the server locally
-uv run python -m hippo.server --hippo-file ./test-data.json
+uv run python -m hippo.server --memory-dir ./test-data
 ```
 
 ## Status

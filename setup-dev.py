@@ -26,7 +26,7 @@ def get_repo_root():
     return Path(__file__).parent.absolute()
 
 
-def setup_mcp_server(memory_path: Path, force: bool = False):
+def setup_mcp_server(memory_dir: Path, force: bool = False):
     """Register Hippo as an MCP server with Q CLI."""
     repo_root = get_repo_root()
     
@@ -41,8 +41,8 @@ def setup_mcp_server(memory_path: Path, force: bool = False):
         "--args", "python",
         "--args", "-m",
         "--args", "hippo.server",
-        "--args", "--hippo-file",
-        "--args", str(memory_path),
+        "--args", "--memory-dir",
+        "--args", str(memory_dir),
         "--scope", "global"
     ]
     
@@ -51,7 +51,7 @@ def setup_mcp_server(memory_path: Path, force: bool = False):
     
     try:
         print(f"🔧 Registering Hippo MCP server...")
-        print(f"   Memory path: {memory_path}")
+        print(f"   Memory path: {memory_dir}")
         print(f"   Repository: {repo_root}")
         
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -69,7 +69,7 @@ def setup_mcp_server(memory_path: Path, force: bool = False):
         return False
 
 
-def print_next_steps(memory_path: Path):
+def print_next_steps(memory_dir: Path):
     """Print instructions for completing the setup."""
     repo_root = get_repo_root()
     guidance_path = repo_root / "guidance.md"
@@ -80,7 +80,7 @@ def print_next_steps(memory_path: Path):
     print(f"   @{guidance_path}")
     print("\n🧪 Test your setup:")
     print("   q chat \"Record an insight: Setup script works great!\"")
-    print(f"\n💾 Your memories will be stored at: {memory_path}")
+    print(f"\n💾 Your memories will be stored at: {memory_dir}")
 
 
 def main():
@@ -90,16 +90,16 @@ def main():
         epilog="""
 Examples:
   python setup-dev.py                    # Use default memory path
-  python setup-dev.py --memory-path ~/my-hippo.json
+  python setup-dev.py --memory-dir ~/my-hippo
   python setup-dev.py --force            # Overwrite existing server
         """
     )
     
     parser.add_argument(
-        "--memory-path",
+        "--memory-dir",
         type=Path,
-        default=Path.home() / ".hippo" / "hippo.json",
-        help="Path to store Hippo memories (default: ~/.hippo/hippo.json)"
+        default=Path.home() / ".hippo",
+        help="Path to store Hippo memories (default: ~/.hippo)"
     )
     
     parser.add_argument(
@@ -124,19 +124,19 @@ Examples:
         sys.exit(1)
     
     # Ensure memory directory exists
-    memory_path = args.memory_path.expanduser().resolve()
-    memory_path.parent.mkdir(parents=True, exist_ok=True)
-    print(f"📁 Ensured memory directory exists: {memory_path.parent}")
+    memory_dir = args.memory_dir.expanduser().resolve()
+    memory_dir.parent.mkdir(parents=True, exist_ok=True)
+    print(f"📁 Ensured memory directory exists: {memory_dir.parent}")
     
     # Setup MCP server
     success = True
     if not args.skip_mcp:
-        success = setup_mcp_server(memory_path, args.force)
+        success = setup_mcp_server(memory_dir, args.force)
     else:
         print("⏭️  Skipping MCP server registration")
     
     if success:
-        print_next_steps(memory_path)
+        print_next_steps(memory_dir)
     else:
         print("\n❌ Setup incomplete. Please fix the errors above and try again.")
         sys.exit(1)

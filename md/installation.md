@@ -9,20 +9,20 @@ You may prefer to read the instructions for your client:
 
 ## Choosing where to store your memories
 
-Right now Hippo stories its data in a JSON file. You can put it anywhere, but I suggest you version it with git. We expect to change how this works later on.
+Hippo stores its data in a directory structure with individual JSON files for each insight and metadata. You can put this directory anywhere, but I suggest you version it with git for backup purposes.
 
 ## Configure the MCP server
 
 The MCP server is currently in prototype form. To add it to your system, 
 
 * Checkout the repository into some directory `$HIPPO`.
-* Choose a path `$HIPPO_FILE` to store the JSON file with your memories (this should be an absolute path, or relative to `$HIPPO`).
-* Add a MCP server named "hippo" with the command show below.
+* Choose a path `$HIPPO_MEMORY_DIR` to store the memory directory (this should be an absolute path, or relative to `$HIPPO`).
+* Add a MCP server named "hippo" with the command shown below.
 
 The command to run hippo is
 
 ```bash
-uv run -d $HIPPO python -m hippo.server --hippo-file $HIPPO_FILE
+uv run -d $HIPPO python -m hippo.server --memory-dir $HIPPO_MEMORY_DIR
 ```
 
 ## Adding guidance to your context
@@ -60,8 +60,8 @@ Clone the hippo repository into `$HIPPO` and then:
            "python", 
            "-m", 
            "hippo.server", 
-           "--hippo-file", 
-           "~/.hippo/hippo.json"
+           "--memory-dir", 
+           "~/.hippo"
          ],
          "timeout": 30000
        }
@@ -91,8 +91,8 @@ q mcp add \
   --args "python" \
   --args "-m" \
   --args "hippo.server" \
-  --args "--hippo-file" \
-  --args "~/.hippo/hippo.json" \
+  --args "--memory-dir" \
+  --args "~/.hippo" \
   --scope global
 ```
 

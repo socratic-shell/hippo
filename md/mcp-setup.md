@@ -13,7 +13,7 @@ Add Hippo to your Q CLI configuration:
 mkdir -p ~/.hippo
 
 # Add server (replace /path/to/hippo with your actual path)
-q configure add-server hippo "uv run --directory /path/to/hippo python -m hippo.server --hippo-file ~/.hippo/hippo.json"
+q configure add-server hippo "uv run --directory /path/to/hippo python -m hippo.server --memory-dir ~/.hippo"
 
 # Add guidance to global context
 q context add --global /path/to/hippo/guidance.md
@@ -35,26 +35,7 @@ Add this to your Claude Desktop configuration file:
         "run", 
         "--directory", "/path/to/hippo",
         "python", "-m", "hippo.server", 
-        "--hippo-file", "~/.hippo/hippo.json"
-      ]
-    }
-  }
-}
-```
-
-Or using Docker:
-
-```json
-{
-  "mcpServers": {
-    "hippo": {
-      "command": "podman",
-      "args": [
-        "run", "--rm", "-i",
-        "-v", "/path/to/hippo/data:/data:Z",
-        "hippo-server",
-        "uv", "run", "python", "-m", "hippo.server",
-        "--hippo-file", "/data/hippo.json"
+        "--memory-dir", "~/.hippo"
       ]
     }
   }
@@ -78,25 +59,7 @@ uv sync
 mkdir -p data
 
 # Test the server
-uv run python -m py.hippo.server --hippo-file ./data/hippo.json
-```
-
-**Option B: Docker Installation**
-```bash
-# Clone the repository
-git clone https://github.com/socratic-shell/hippo.git
-cd hippo
-
-# Build the image
-podman build -t hippo-server .
-# or: docker build -t hippo-server .
-
-# Create data directory
-mkdir -p data
-
-# Test the server
-podman run --rm -i -v ./data:/data:Z hippo-server
-# or: docker run --rm -i -v ./data:/data hippo-server
+uv run python -m py.hippo.server --memory-dir ./data
 ```
 
 ### 2. Configure Your AI Tool
@@ -122,7 +85,6 @@ The AI should respond using the `hippo_search_insights` tool. If you get an erro
 ### "Command not found" errors
 
 - **uv not found**: Install uv with `curl -LsSf https://astral.sh/uv/install.sh | sh`
-- **podman/docker not found**: Install your preferred container runtime
 - **Path issues**: Use absolute paths in your configuration
 
 ### "Permission denied" errors
@@ -132,8 +94,8 @@ The AI should respond using the `hippo_search_insights` tool. If you get an erro
 
 ### "Server not responding" errors
 
-- Test the server manually first: `uv run python -m py.hippo.server --hippo-file ./data/hippo.json`
-- Check that the hippo.json file is created and writable
+- Test the server manually first: `uv run python -m py.hippo.server --memory-dir ./data`
+- Check that the memory directory is created and writable
 - Verify all paths in your configuration are correct
 
 ### "Tool not available" errors
@@ -144,7 +106,7 @@ The AI should respond using the `hippo_search_insights` tool. If you get an erro
 
 ## Data Storage
 
-Hippo stores all insights in a single JSON file specified by `--hippo-file`. This file:
+Hippo stores all insights in a directory specified by `--memory-dir`. This directory:
 
 - Is created automatically if it doesn't exist
 - Should be backed up regularly (it contains all your insights)
@@ -153,6 +115,5 @@ Hippo stores all insights in a single JSON file specified by `--hippo-file`. Thi
 
 ## Security Notes
 
-- The hippo.json file contains your conversation insights - treat it as sensitive data
-- When using Docker, the container runs as root by default - consider user mapping for production
+- The memory directory contains your conversation insights - treat it as sensitive data
 - MCP servers run locally and don't send data over the network
