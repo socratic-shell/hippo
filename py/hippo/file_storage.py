@@ -10,7 +10,7 @@ import threading
 import time
 from datetime import date
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 from uuid import UUID
 
 import aiofiles
@@ -58,7 +58,7 @@ class FileBasedStorage:
         self._cache_loaded = False
         
         # Metadata cache (active day counter, etc.)
-        self._metadata_cache: Optional[Dict] = None
+        self._metadata_cache: Optional[Dict[str, Any]] = None
         
         # File watching infrastructure
         # 💡: Track UUIDs we just wrote to avoid refreshing cache on our own changes
@@ -102,7 +102,7 @@ class FileBasedStorage:
         """Get the file path for an insight given its UUID."""
         return self.insights_dir / f"{uuid}.json"
     
-    async def _atomic_write_json(self, file_path: Path, data: dict) -> None:
+    async def _atomic_write_json(self, file_path: Path, data: Dict[str, Any]) -> None:
         """
         Atomically write JSON data to a file using temp file + rename.
         
@@ -135,7 +135,7 @@ class FileBasedStorage:
                 pass
             raise
     
-    async def _load_metadata(self) -> Dict:
+    async def _load_metadata(self) -> Dict[str, Any]:
         """Load metadata (active day counter, etc.) from metadata file."""
         if self._metadata_cache is not None:
             return self._metadata_cache
@@ -230,7 +230,7 @@ class FileBasedStorage:
         
         return uuid_str
     
-    async def update_insight(self, uuid: UUID, updates: dict) -> bool:
+    async def update_insight(self, uuid: UUID, updates: Dict[str, Any]) -> bool:
         """
         Update an existing insight.
         
@@ -307,7 +307,7 @@ class FileBasedStorage:
         with self._cache_lock:
             return list(self._insights_cache.values())
     
-    async def search_insights(self, query: str, filters: Optional[dict] = None) -> List[Insight]:
+    async def search_insights(self, query: str, filters: Optional[Dict[str, Any]] = None) -> List[Insight]:
         """
         Search insights by content and situation.
         
