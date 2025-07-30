@@ -563,11 +563,11 @@ class FileBasedStorage:
         with self._recently_written_lock:
             self._recently_written_uuids.add(uuid_str)
     
-    def __enter__(self):
+    def __enter__(self) -> 'FileBasedStorage':
         """Context manager entry."""
         return self
     
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
         """Context manager exit - ensures proper cleanup."""
         self.shutdown()
         return False  # Don't suppress exceptions
@@ -605,17 +605,17 @@ class _InsightFileEventHandler(FileSystemEventHandler):
         super().__init__()
         self.storage = storage
     
-    def on_created(self, event):
+    def on_created(self, event: Any) -> None:
         """Handle file creation events."""
         if not event.is_directory and event.src_path.endswith('.json'):
             self.storage._on_file_event(event.src_path)
     
-    def on_modified(self, event):
+    def on_modified(self, event: Any) -> None:
         """Handle file modification events."""
         if not event.is_directory and event.src_path.endswith('.json'):
             self.storage._on_file_event(event.src_path)
     
-    def on_deleted(self, event):
+    def on_deleted(self, event: Any) -> None:
         """Handle file deletion events."""
         if not event.is_directory and event.src_path.endswith('.json'):
             self.storage._on_file_event(event.src_path)

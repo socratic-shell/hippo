@@ -9,7 +9,7 @@ from .file_storage import FileBasedStorage
 from .models import Insight
 
 
-async def test_basic_operations():
+async def test_basic_operations() -> None:
     """Test basic CRUD operations with FileBasedStorage."""
     
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -76,7 +76,7 @@ async def test_basic_operations():
         print("All basic operations passed!")
 
 
-async def test_active_day_tracking():
+async def test_active_day_tracking() -> None:
     """Test active day counter functionality."""
     
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -93,7 +93,7 @@ async def test_active_day_tracking():
         print("✓ Active day tracking works")
 
 
-async def test_file_structure():
+async def test_file_structure() -> None:
     """Test that files are created in the expected structure."""
     
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -126,7 +126,7 @@ async def test_file_structure():
         print("✓ File structure is correct")
 
 
-async def test_file_watching_enabled():
+async def test_file_watching_enabled() -> None:
     """Test that file watching can be enabled without hanging."""
     
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -152,7 +152,7 @@ async def test_file_watching_enabled():
 
 
 if __name__ == "__main__":
-    async def run_tests():
+    async def run_tests() -> None:
         await test_basic_operations()
         await test_active_day_tracking() 
         await test_file_structure()

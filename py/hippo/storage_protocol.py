@@ -1,6 +1,6 @@
 """Storage protocol interface for Hippo storage implementations."""
 
-from typing import Protocol, List
+from typing import Any, List, Protocol
 from uuid import UUID
 
 from .models import Insight
@@ -37,10 +37,10 @@ class StorageProtocol(Protocol):
         """Record that an insight was accessed."""
         ...
     
-    def __enter__(self):
+    def __enter__(self) -> 'StorageProtocol':
         """Context manager entry."""
         ...
     
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Context manager exit."""
         ...

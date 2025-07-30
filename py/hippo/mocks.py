@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
 from .models import Insight, HippoStorage
@@ -25,11 +25,11 @@ class InMemoryStorage(HippoStorage):
         )
     
     # Legacy JsonStorage compatibility methods
-    async def load(self):
+    async def load(self) -> 'InMemoryStorage':
         """Return self for compatibility with JsonStorage interface."""
         return self
     
-    async def save(self):
+    async def save(self) -> None:
         """No-op for in-memory storage."""
         pass
     
@@ -61,11 +61,11 @@ class InMemoryStorage(HippoStorage):
         if insight:
             insight.record_access(await self.get_current_active_day())
     
-    def __enter__(self):
+    def __enter__(self) -> 'InMemoryStorage':
         """Context manager entry."""
         return self
     
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
         """Context manager exit."""
         return False  # Don't suppress exceptions
 
