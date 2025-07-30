@@ -18,6 +18,7 @@ from .constants import UPVOTE_MULTIPLIER, DOWNVOTE_MULTIPLIER
 from .models import Insight, HippoStorage
 from .search import InsightSearcher
 from .file_storage import FileBasedStorage
+from .storage_protocol import StorageProtocol
 
 # 💡: Adding comprehensive logging for MCP server debugging
 # MCP servers run in stdio mode which makes debugging tricky - we need
@@ -49,13 +50,13 @@ logger = logging.getLogger(__name__)
 class HippoServer:
     """MCP server for Hippo insight management."""
     
-    def __init__(self, storage_path: Optional[Path] = None, *, storage = None) -> None:
+    def __init__(self, storage_path: Optional[Path] = None, *, storage: Optional[StorageProtocol] = None) -> None:
         """Initialize server with either storage path or storage instance."""
         logger.info("Initializing HippoServer...")
         
         if storage is not None:
             logger.debug("Using provided storage instance")
-            self.storage = storage
+            self.storage: StorageProtocol = storage
         elif storage_path is not None:
             logger.info(f"Creating FileBasedStorage with directory: {storage_path}")
             self.storage = FileBasedStorage(storage_path)
@@ -306,10 +307,11 @@ class HippoServer:
             
             # Perform search
             all_insights = await self.storage.get_all_insights()
-            # Create a temporary HippoStorage object for the searcher
-            storage_data = HippoStorage(insights=all_insights)
+            current_active_day = await self.storage.get_current_active_day()
+            
             results = self.searcher.search(
-                storage=storage_data,
+                insights=all_insights,
+                current_active_day=current_active_day,
                 query=query,
                 situation_filter=situation_filter,
                 relevance_range=relevance_range,

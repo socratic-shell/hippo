@@ -77,7 +77,8 @@ class InsightSearcher:
     
     def search(
         self,
-        storage,  # HippoStorage instance
+        insights: List[Insight],
+        current_active_day: int,
         query: str = "",
         situation_filter: Optional[List[str]] = None,
         relevance_range: Optional[Tuple[float, Optional[float]]] = None,
@@ -88,19 +89,17 @@ class InsightSearcher:
         Search insights with various filters.
         
         Args:
-            storage: HippoStorage instance containing insights
+            insights: List of insights to search through
+            current_active_day: Current active day for temporal calculations
             query: Text to search for in content
             situation_filter: Situation elements to match (partial matching)
             relevance_range: (min_relevance, max_relevance) tuple
             limit: (offset, count) tuple for pagination
             record_access: Whether to record access for returned insights
         """
-        # Get current active day for temporal calculations
-        current_active_day = storage.get_current_active_day()
-        
         # Compute relevance scores for all insights (with minimal filtering)
         all_scored = self._compute_relevance_scores(
-            storage.insights, query, situation_filter, current_active_day
+            insights, query, situation_filter, current_active_day
         )
         
         # Calculate relevance distribution from all scored results

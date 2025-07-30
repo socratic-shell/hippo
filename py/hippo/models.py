@@ -155,6 +155,10 @@ class Insight(BaseModel):
         if not recent_entries:
             return 0.0
         
+        # 💡: Sort recent_entries by day to handle cases where daily_access_counts
+        # becomes unsorted due to time manipulation in tests
+        recent_entries.sort(key=lambda x: x[0])
+        
         oldest_recent_day = recent_entries[0][0]
         newest_recent_day = recent_entries[-1][0]
         recent_days_spanned = newest_recent_day - oldest_recent_day + 1

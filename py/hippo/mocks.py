@@ -9,7 +9,10 @@ from .models import Insight, HippoStorage
 
 
 class InMemoryStorage(HippoStorage):
-    """In-memory storage implementation for testing without disk I/O."""
+    """In-memory storage implementation for testing without disk I/O.
+    
+    Implements StorageProtocol for compatibility with HippoServer.
+    """
     
     def __init__(self, initial_active_day: int = 1):
         """Initialize with empty insights and controllable active day."""
@@ -21,6 +24,7 @@ class InMemoryStorage(HippoStorage):
             last_calendar_date_used=None
         )
     
+    # Legacy JsonStorage compatibility methods
     async def load(self):
         """Return self for compatibility with JsonStorage interface."""
         return self
@@ -28,6 +32,45 @@ class InMemoryStorage(HippoStorage):
     async def save(self):
         """No-op for in-memory storage."""
         pass
+    
+    # StorageProtocol implementation
+    async def get_all_insights(self) -> List[Insight]:
+        """Get all insights from storage."""
+        return self.insights
+    
+    async def get_current_active_day(self) -> int:
+        """Get current active day, updating if needed."""
+        return super().get_current_active_day()  # Use parent method
+    
+    async def add_insight(self, insight: Insight) -> None:
+        """Add a new insight to storage."""
+        super().add_insight(insight)  # Use parent method
+    
+    async def store_insight(self, insight: Insight) -> None:
+        """Store/update an insight in storage."""
+        # For in-memory storage, storing is the same as adding if not exists
+        existing = self.find_by_uuid(insight.uuid)
+        if existing:
+            # Update existing insight
+            idx = self.insights.index(existing)
+            self.insights[idx] = insight
+        else:
+            # Add new insight
+            self.insights.append(insight)
+    
+    async def record_insight_access(self, uuid: UUID) -> None:
+        """Record that an insight was accessed."""
+        insight = self.find_by_uuid(uuid)
+        if insight:
+            insight.record_access(super().get_current_active_day())
+    
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit."""
+        return False  # Don't suppress exceptions
 
 
 class TimeController:

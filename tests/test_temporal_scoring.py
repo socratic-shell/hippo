@@ -14,55 +14,23 @@ from hippo.constants import (
 )
 
 
-class TestStorageWrapper:
-    """Wrapper to adapt InMemoryStorage to JsonStorage interface."""
-    
-    def __init__(self, storage: InMemoryStorage):
-        self.storage = storage
-    
-    async def load(self):
-        """Return the storage instance directly."""
-        return self.storage
-    
-    async def save(self):
-        """No-op for in-memory storage."""
-        pass
-    
-    async def add_insight(self, insight):
-        """Add insight to storage."""
-        self.storage.add_insight(insight)  # Now synchronous
-        
-    async def update_insight(self, insight):
-        """Update insight in storage."""
-        self.storage.update_insight(insight)  # Now synchronous
-        return True
-    
-    async def get_all_insights(self):
-        """Get all insights from storage."""
-        return self.storage.get_all_insights()  # Now synchronous
-
-
 class TestTemporalScoring:
     """Integration tests for temporal scoring through MCP server interface."""
     
     def setup_method(self):
         """Set up test environment for each test."""
         self.storage = InMemoryStorage()
-        # 💡: For now, we'll create a HippoServer with a dummy path and then
-        # replace its storage with our InMemoryStorage. This is a bit hacky
-        # but allows us to test without modifying the server constructor.
-        from pathlib import Path
-        import tempfile
         
-        # Create server with temporary path
-        temp_path = Path(tempfile.mktemp())
-        self.server = HippoServer(temp_path)
-        
-        # Replace the JsonStorage with our InMemoryStorage
-        # We need to create a wrapper that has the same interface as JsonStorage
-        self.server.storage = TestStorageWrapper(self.storage)
+        # Create server with our in-memory storage directly
+        # No FileBasedStorage created, no threads, no cleanup needed
+        self.server = HippoServer(storage=self.storage)
         
         self.time_ctrl = TimeController(self.storage)
+    
+    def teardown_method(self):
+        """Clean up after each test."""
+        # Use HippoServer's context manager exit for proper cleanup
+        self.server.__exit__(None, None, None)
     
     async def create_insight(self, content: str, situation: list = None, importance: float = 0.8) -> str:
         """Helper to create insight and return UUID."""
