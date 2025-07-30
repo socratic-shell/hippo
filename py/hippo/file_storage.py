@@ -70,7 +70,7 @@ class FileBasedStorage:
         self._debounce_lock = threading.Lock()
         
         # File watcher components
-        self._observer: Optional[Observer] = None
+        self._observer: Optional[Any] = None
         self._periodic_timer: Optional[threading.Timer] = None
         self._shutdown_requested = False
         self._watching_enabled = enable_watching
