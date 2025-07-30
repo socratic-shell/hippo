@@ -26,26 +26,54 @@ uv sync --extra dev
 
 # Test the installation
 uv run python -m hippo.server --help
-
-# Verify everything works
-./verify-install.sh
 ```
 
-### 2. Connect to Your AI Tool
+### 2. Quick Development Setup
 
-**For Q CLI:**
+For Q CLI users, use the automated setup script:
+
+```bash
+# Automatic setup with defaults
+python setup-dev.py
+
+# Custom memory location
+python setup-dev.py --memory-path ~/my-project/hippo-memories.json
+
+# See all options
+python setup-dev.py --help
+```
+
+This script will:
+- Register Hippo as a global MCP server in Q CLI
+- Create the memory storage directory
+- Provide instructions for adding the guidance context
+
+### 3. Manual Setup (Alternative)
+
+**For Q CLI (Manual):**
 ```bash
 # Create data directory
 mkdir -p ~/.hippo
 
 # Add server (replace /path/to/hippo with your actual path)
-q configure add-server hippo "uv run --directory /path/to/hippo python -m hippo.server --hippo-file ~/.hippo/hippo.json"
+q mcp add \
+  --name hippo \
+  --command uv \
+  --args run \
+  --args --directory \
+  --args /path/to/hippo \
+  --args python \
+  --args -m \
+  --args hippo.server \
+  --args --hippo-file \
+  --args ~/.hippo/hippo.json \
+  --scope global
 
-# Add guidance to global context
-q context add --global /path/to/hippo/guidance.md
+# Add guidance to your CLAUDE.md or global context
+# @/path/to/hippo/guidance.md
 ```
 
-**For Claude Desktop:** Add to `claude_desktop_config.json`:
+**For Claude Desktop (Manual):** Add to `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
