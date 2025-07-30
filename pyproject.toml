@@ -77,4 +77,5 @@ packages = ["py/hippo"]
 dev = [
     "pytest>=8.4.1",
     "pytest-asyncio>=1.1.0",
+    "types-aiofiles>=24.1.0.20250708",
 ]

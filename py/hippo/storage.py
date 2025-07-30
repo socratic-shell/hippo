@@ -67,7 +67,7 @@ class JsonStorage:
     async def add_insight(self, insight: Insight) -> None:
         """Add an insight and save to disk."""
         data = await self.load()
-        data.add_insight(insight)
+        await data.add_insight(insight)
         await self.save()
     
     async def update_insight(self, insight: Insight) -> bool:
@@ -79,7 +79,7 @@ class JsonStorage:
         
         # Replace with updated version
         data.remove_by_uuid(insight.uuid)
-        data.add_insight(insight)
+        await data.add_insight(insight)
         await self.save()
         return True
     

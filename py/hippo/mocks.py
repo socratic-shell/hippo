@@ -38,15 +38,10 @@ class InMemoryStorage(HippoStorage):
         """Get all insights from storage."""
         return self.insights
     
-    async def get_current_active_day(self) -> int:
-        """Get current active day, updating if needed."""
-        return super().get_current_active_day()  # Use parent method
+    # These methods are now async in the parent class, so we can call them directly
+    # No need to override since they already match the protocol
     
-    async def add_insight(self, insight: Insight) -> None:
-        """Add a new insight to storage."""
-        super().add_insight(insight)  # Use parent method
-    
-    async def store_insight(self, insight: Insight) -> None:
+    async def store_insight(self, insight: Insight) -> str:
         """Store/update an insight in storage."""
         # For in-memory storage, storing is the same as adding if not exists
         existing = self.find_by_uuid(insight.uuid)
@@ -57,12 +52,14 @@ class InMemoryStorage(HippoStorage):
         else:
             # Add new insight
             self.insights.append(insight)
+        
+        return str(insight.uuid)
     
     async def record_insight_access(self, uuid: UUID) -> None:
         """Record that an insight was accessed."""
         insight = self.find_by_uuid(uuid)
         if insight:
-            insight.record_access(super().get_current_active_day())
+            insight.record_access(await self.get_current_active_day())
     
     def __enter__(self):
         """Context manager entry."""

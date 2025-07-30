@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Tuple
 
 from pydantic import BaseModel, Field
 from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics.pairwise import cosine_similarity  # type: ignore[import-untyped]
 
 from .models import Insight
 from .constants import (

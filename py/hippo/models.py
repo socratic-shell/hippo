@@ -219,7 +219,7 @@ class HippoStorage(BaseModel):
         description="Last calendar date the system was used (to detect new active days)"
     )
     
-    def get_current_active_day(self) -> int:
+    async def get_current_active_day(self) -> int:
         """
         Get the current active day, incrementing the counter if this is a new calendar day.
         
@@ -235,7 +235,7 @@ class HippoStorage(BaseModel):
         
         return self.active_day_counter
     
-    def add_insight(self, insight: Insight) -> None:
+    async def add_insight(self, insight: Insight) -> None:
         """Add a new insight to storage."""
         self.insights.append(insight)
     

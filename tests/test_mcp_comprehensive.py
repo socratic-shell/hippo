@@ -140,7 +140,7 @@ async def test_temporal_scoring_and_storage():
     assert 5 in creation_days, "Should have insight from day 5"
     
     # Verify current active day is maintained
-    assert storage.get_current_active_day() == 10
+    assert await storage.get_current_active_day() == 10
 
 
 @pytest.mark.asyncio

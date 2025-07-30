@@ -25,8 +25,12 @@ class StorageProtocol(Protocol):
         """Add a new insight to storage."""
         ...
     
-    async def store_insight(self, insight: Insight) -> None:
-        """Store/update an insight in storage."""
+    async def store_insight(self, insight: Insight) -> str:
+        """Store/update an insight in storage.
+        
+        Returns:
+            UUID string of the stored insight
+        """
         ...
     
     async def record_insight_access(self, uuid: UUID) -> None:
