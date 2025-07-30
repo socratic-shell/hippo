@@ -68,7 +68,7 @@ class HippoServer:
         self.searcher = InsightSearcher()
         
         logger.debug("Creating MCP Server instance...")
-        self.server = Server("hippo")
+        self.server: Server[Any] = Server("hippo")
         
         logger.info("Registering MCP tools...")
         # Register MCP tools
@@ -79,11 +79,11 @@ class HippoServer:
         """Context manager entry."""
         return self
     
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Context manager exit - cleanup storage resources."""
         if hasattr(self.storage, '__exit__'):
             self.storage.__exit__(exc_type, exc_val, exc_tb)
-        return False  # Don't suppress exceptions
+        return None  # Don't suppress exceptions
     
     def _register_tools(self) -> None:
         """Register all MCP tools."""

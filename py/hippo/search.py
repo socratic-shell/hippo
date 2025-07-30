@@ -200,7 +200,7 @@ class InsightSearcher:
         try:
             # Compute semantic similarity using sentence transformers
             embeddings = self.model.encode([content, query])
-            similarity = cosine_similarity([embeddings[0]], [embeddings[1]])[0][0]
+            similarity = float(cosine_similarity([embeddings[0]], [embeddings[1]])[0][0])
             
             # Cosine similarity ranges from -1 to 1:
             # 1 = identical meaning, 0 = unrelated, -1 = opposite meaning
@@ -271,7 +271,7 @@ class InsightSearcher:
         """Compute semantic similarity between two texts."""
         try:
             embeddings = self.model.encode([text1, text2])
-            similarity = cosine_similarity([embeddings[0]], [embeddings[1]])[0][0]
+            similarity = float(cosine_similarity([embeddings[0]], [embeddings[1]])[0][0])
             # Cosine similarity ranges from -1 to 1, but for search relevance
             # we only want positive similarities (negative = irrelevant, not anti-relevant)
             return max(0.0, similarity)

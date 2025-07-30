@@ -45,6 +45,7 @@ async def test_basic_operations() -> None:
         
         # Verify update
         updated = await storage.get_insight(insight.uuid)
+        assert updated is not None, "Updated insight should not be None"
         assert updated.content == "Updated content"
         assert updated.importance == 0.9
         print("✓ Update works")

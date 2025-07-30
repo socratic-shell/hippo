@@ -364,7 +364,7 @@ class FileBasedStorage:
             metadata["last_calendar_date_used"] = today.isoformat()
             await self._save_metadata()
         
-        return metadata["active_day_counter"]
+        return int(metadata["active_day_counter"])
     
     async def record_insight_access(self, uuid: UUID) -> None:
         """
@@ -567,10 +567,10 @@ class FileBasedStorage:
         """Context manager entry."""
         return self
     
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Context manager exit - ensures proper cleanup."""
         self.shutdown()
-        return False  # Don't suppress exceptions
+        return None  # Don't suppress exceptions
     
     def shutdown(self) -> None:
         """
