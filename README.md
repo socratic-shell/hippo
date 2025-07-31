@@ -66,8 +66,7 @@ q mcp add \
   --args -m \
   --args hippo.server \
   --args --memory-dir \
-  --args ~/.hippo \
-  --scope global
+  --args ~/.hippo
 
 # Add guidance to your CLAUDE.md or global context
 # @/path/to/hippo/guidance.md

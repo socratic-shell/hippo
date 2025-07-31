@@ -80,8 +80,7 @@ def setup_q_cli_mcp(memory_dir: Path, force: bool = False):
         "--args", "hippo.server",
         "--args", "--memory-dir",
         "--args", str(memory_dir),
-        "--env", "HIPPO_LOG=info",
-        "--scope", "global"
+        "--env", "HIPPO_LOG=info"
     ]
 
     if force:
