@@ -2,14 +2,21 @@
 """
 Hippo Development Setup Script
 
-Automatically configures Hippo as an MCP server for Q CLI.
+Automatically configures Hippo as an MCP server for Q CLI or Claude Code.
 """
 
 import argparse
+import shutil
 import subprocess
 import sys
+from enum import Enum, auto
 from pathlib import Path
-import shutil
+
+
+class CLITool(Enum):
+    Q_CLI = auto()
+    CLAUDE_CODE = auto()
+    BOTH = auto()
 
 
 def check_q_cli():
@@ -21,15 +28,45 @@ def check_q_cli():
     return True
 
 
+def check_claude_code():
+    """Check if Claude Code is available."""
+    if not _is_claude_available():
+        print("❌ Error: Claude Code not found. Please install Claude Code first.")
+        print("   Visit: https://claude.ai/code")
+        return False
+    return True
+
+
+def _is_claude_available():
+    """Check if Claude Code is available via binary or config directory."""
+    # 💡: Check both binary and config directory since claude might be an alias
+    return shutil.which("claude") is not None or (Path.home() / ".claude").exists()
+
+
+def detect_available_tools():
+    """Detect which CLI tools are available."""
+    has_q = shutil.which("q") is not None
+    has_claude = _is_claude_available()
+
+    if has_q and has_claude:
+        return CLITool.BOTH
+    elif has_q:
+        return CLITool.Q_CLI
+    elif has_claude:
+        return CLITool.CLAUDE_CODE
+    else:
+        return None
+
+
 def get_repo_root():
     """Get the repository root directory."""
     return Path(__file__).parent.absolute()
 
 
-def setup_mcp_server(memory_dir: Path, force: bool = False):
+def setup_q_cli_mcp(memory_dir: Path, force: bool = False):
     """Register Hippo as an MCP server with Q CLI."""
     repo_root = get_repo_root()
-    
+
     # Build the command arguments
     cmd = [
         "q", "mcp", "add",
@@ -45,98 +82,206 @@ def setup_mcp_server(memory_dir: Path, force: bool = False):
         "--args", str(memory_dir),
         "--scope", "global"
     ]
-    
+
     if force:
         cmd.append("--force")
-    
+
     try:
-        print(f"🔧 Registering Hippo MCP server...")
+        print("🔧 Registering Hippo MCP server with Q CLI...")
         print(f"   Memory path: {memory_dir}")
         print(f"   Repository: {repo_root}")
-        
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        print("✅ MCP server 'hippo' registered successfully!")
+
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
+        print("✅ MCP server 'hippo' registered successfully with Q CLI!")
         return True
-        
+
     except subprocess.CalledProcessError as e:
-        print(f"❌ Failed to register MCP server:")
+        print("❌ Failed to register MCP server with Q CLI:")
         print(f"   Command: {' '.join(cmd)}")
         print(f"   Error: {e.stderr.strip()}")
-        
+
         if "already exists" in e.stderr and not force:
             print("\n💡 Tip: Use --force to overwrite existing server")
-        
+
         return False
 
 
-def print_next_steps(memory_dir: Path):
+def setup_claude_code_mcp(memory_dir: Path, scope: str = "user"):
+    """Register Hippo as an MCP server with Claude Code."""
+    repo_root = get_repo_root()
+
+    # 💡: Claude Code uses -- to separate command from its arguments
+    cmd_args = [
+        "mcp", "add",
+        "--scope", scope,
+        "hippo",
+        "uv",
+        "--",
+        "run",
+        "--directory",
+        str(repo_root),
+        "python",
+        "-m",
+        "hippo.server",
+        "--memory-dir",
+        str(memory_dir)
+    ]
+
+    try:
+        print("🔧 Registering Hippo MCP server with Claude Code...")
+        print(f"   Memory path: {memory_dir}")
+        print(f"   Repository: {repo_root}")
+        print(f"   Scope: {scope}")
+
+        # 💡: Use shell=True to handle bash aliases properly
+        cmd_str = f"claude {' '.join(cmd_args)}"
+        result = subprocess.run(
+            cmd_str, 
+            shell=True, 
+            capture_output=True, 
+            text=True, 
+            check=True
+        )
+        print("✅ MCP server 'hippo' registered successfully with Claude Code!")
+        return True
+
+    except subprocess.CalledProcessError as e:
+        print("❌ Failed to register MCP server with Claude Code:")
+        print(f"   Command: {cmd_str}")
+        print(f"   Error: {e.stderr.strip()}")
+
+        if "already exists" in e.stderr:
+            print("\n💡 Tip: Remove existing server with: claude mcp remove hippo")
+
+        return False
+    except FileNotFoundError:
+        print("❌ Failed to register MCP server with Claude Code:")
+        print("   'claude' command not found. Please ensure Claude Code is properly installed")
+        print("   and accessible in your shell.")
+        return False
+
+
+def print_next_steps(memory_dir: Path, tool: CLITool):
     """Print instructions for completing the setup."""
     repo_root = get_repo_root()
     guidance_path = repo_root / "guidance.md"
-    
+
     print("\n🎉 Setup complete!")
-    print("\n📝 Next step: Add guidance to your Q CLI context")
-    print("   Add this line to your CLAUDE.md or global context file:")
-    print(f"   @{guidance_path}")
-    print("\n🧪 Test your setup:")
-    print("   q chat \"Record an insight: Setup script works great!\"")
+
+    if tool in (CLITool.Q_CLI, CLITool.BOTH):
+        print("\n📝 For Q CLI:")
+        print("   Add this line to your CLAUDE.md or global context file:")
+        print(f"   @{guidance_path}")
+        print("\n🧪 Test with Q CLI:")
+        print("   q chat \"Record an insight: Setup script works great!\"")
+
+    if tool in (CLITool.CLAUDE_CODE, CLITool.BOTH):
+        print("\n📝 For Claude Code:")
+        print("   Add this line to your CLAUDE.md or project instructions:")
+        print(f"   @{guidance_path}")
+        print("\n🧪 Test with Claude Code:")
+        print("   claude chat \"Record an insight: Setup script works great!\"")
+
     print(f"\n💾 Your memories will be stored at: {memory_dir}")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Set up Hippo for development with Q CLI",
+        description="Set up Hippo for development with Q CLI or Claude Code",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python setup-dev.py                    # Use default memory path
+  python setup-dev.py                    # Auto-detect and use available CLI
+  python setup-dev.py --tool q           # Setup for Q CLI only
+  python setup-dev.py --tool claude      # Setup for Claude Code only
+  python setup-dev.py --tool both        # Setup for both tools
   python setup-dev.py --memory-dir ~/my-hippo
-  python setup-dev.py --force            # Overwrite existing server
+  python setup-dev.py --force            # Overwrite existing Q CLI config
         """
     )
-    
+
     parser.add_argument(
         "--memory-dir",
         type=Path,
         default=Path.home() / ".hippo",
         help="Path to store Hippo memories (default: ~/.hippo)"
     )
-    
+
+    parser.add_argument(
+        "--tool",
+        choices=["q", "claude", "both", "auto"],
+        default="auto",
+        help="Which CLI tool to configure (default: auto-detect)"
+    )
+
+    parser.add_argument(
+        "--claude-scope",
+        choices=["user", "local", "project"],
+        default="user",
+        help="Scope for Claude Code MCP configuration (default: user)"
+    )
+
     parser.add_argument(
         "--skip-mcp",
         action="store_true",
         help="Skip MCP server registration"
     )
-    
+
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Overwrite existing MCP server configuration"
+        help="Overwrite existing Q CLI configuration"
     )
-    
+
     args = parser.parse_args()
-    
+
     print("🦛 Hippo Development Setup")
     print("=" * 30)
-    
+
+    # Determine which tool to use
+    if args.tool == "auto":
+        available = detect_available_tools()
+        if available is None:
+            print(
+                "❌ No supported CLI tools found. "
+                "Please install Q CLI or Claude Code."
+            )
+            print("   Q CLI: https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/q-cli.html")
+            print("   Claude Code: https://claude.ai/code")
+            sys.exit(1)
+        tool = available
+    else:
+        tool_map = {
+            "q": CLITool.Q_CLI,
+            "claude": CLITool.CLAUDE_CODE,
+            "both": CLITool.BOTH
+        }
+        tool = tool_map[args.tool]
+
     # Check prerequisites
-    if not args.skip_mcp and not check_q_cli():
-        sys.exit(1)
-    
+    if not args.skip_mcp:
+        if tool in (CLITool.Q_CLI, CLITool.BOTH) and not check_q_cli():
+            sys.exit(1)
+        if tool in (CLITool.CLAUDE_CODE, CLITool.BOTH) and not check_claude_code():
+            sys.exit(1)
+
     # Ensure memory directory exists
     memory_dir = args.memory_dir.expanduser().resolve()
     memory_dir.parent.mkdir(parents=True, exist_ok=True)
     print(f"📁 Ensured memory directory exists: {memory_dir.parent}")
-    
-    # Setup MCP server
+
+    # Setup MCP server(s)
     success = True
     if not args.skip_mcp:
-        success = setup_mcp_server(memory_dir, args.force)
+        if tool in (CLITool.Q_CLI, CLITool.BOTH):
+            success = setup_q_cli_mcp(memory_dir, args.force) and success
+        if tool in (CLITool.CLAUDE_CODE, CLITool.BOTH):
+            success = setup_claude_code_mcp(memory_dir, args.claude_scope) and success
     else:
         print("⏭️  Skipping MCP server registration")
-    
+
     if success:
-        print_next_steps(memory_dir)
+        print_next_steps(memory_dir, tool)
     else:
         print("\n❌ Setup incomplete. Please fix the errors above and try again.")
         sys.exit(1)

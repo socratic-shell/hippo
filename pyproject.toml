@@ -17,14 +17,6 @@ dependencies = [
     "watchdog>=3.0.0",
 ]
 
-[project.optional-dependencies]
-dev = [
-    "mypy>=1.13.0",
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.24.0",
-    "ruff>=0.8.0",
-]
-
 [project.scripts]
 hippo-server = "hippo.server:main"
 
@@ -75,7 +67,9 @@ packages = ["py/hippo"]
 
 [dependency-groups]
 dev = [
+    "mypy>=1.13.0",
     "pytest>=8.4.1",
     "pytest-asyncio>=1.1.0",
+    "ruff>=0.8.0",
     "types-aiofiles>=24.1.0.20250708",
 ]
