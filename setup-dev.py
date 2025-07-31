@@ -80,6 +80,7 @@ def setup_q_cli_mcp(memory_dir: Path, force: bool = False):
         "--args", "hippo.server",
         "--args", "--memory-dir",
         "--args", str(memory_dir),
+        "--env", "HIPPO_LOG=info",
         "--scope", "global"
     ]
 
@@ -89,7 +90,8 @@ def setup_q_cli_mcp(memory_dir: Path, force: bool = False):
     try:
         print("🔧 Registering Hippo MCP server with Q CLI...")
         print(f"   Memory path: {memory_dir}")
-        print(f"   Repository: {repo_root}")
+        print(f"   Repository: {repo_root}")  
+        print(f"   Logging: INFO level to {memory_dir}/hippo.log")
 
         subprocess.run(cmd, capture_output=True, text=True, check=True)
         print("✅ MCP server 'hippo' registered successfully with Q CLI!")
@@ -114,6 +116,7 @@ def setup_claude_code_mcp(memory_dir: Path, scope: str = "user"):
     cmd_args = [
         "mcp", "add",
         "--scope", scope,
+        "--env", "HIPPO_LOG=info",
         "hippo",
         "uv",
         "--",
@@ -132,6 +135,7 @@ def setup_claude_code_mcp(memory_dir: Path, scope: str = "user"):
         print(f"   Memory path: {memory_dir}")
         print(f"   Repository: {repo_root}")
         print(f"   Scope: {scope}")
+        print(f"   Logging: INFO level to {memory_dir}/hippo.log")
 
         # 💡: Use shell=True to handle bash aliases properly
         cmd_str = f"claude {' '.join(cmd_args)}"

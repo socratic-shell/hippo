@@ -6,10 +6,11 @@ import asyncio
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 from uuid import UUID
 
 import click
+import structlog
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
@@ -23,28 +24,106 @@ from .storage_protocol import StorageProtocol
 # 💡: Adding comprehensive logging for MCP server debugging
 # MCP servers run in stdio mode which makes debugging tricky - we need
 # to log to stderr to avoid interfering with the MCP protocol on stdout
-# Check for HIPPO_LOG environment variable to optionally log to file
-# If HIPPO_LOG is not set, only log ERROR and above to minimize noise
 import os
 
-log_file = os.environ.get('HIPPO_LOG')
-if log_file:
-    # Log to file if HIPPO_LOG is set - use DEBUG level for full debugging
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        filename=log_file,
-        filemode='a'  # Append mode
+def setup_logging(memory_dir: Optional[Path] = None) -> structlog.BoundLogger:
+    """
+    Set up structured logging configuration based on HIPPO_LOG environment variable.
+    
+    Args:
+        memory_dir: Directory to store log files when HIPPO_LOG is set to a level
+        
+    Returns:
+        Configured structlog logger
+    """
+    hippo_log = os.environ.get('HIPPO_LOG')
+    
+    # 💡: Configure structlog processors for consistent structured output
+    # Add timestamp, log level, and logger name to all log entries
+    processors: List[Any] = [
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.add_logger_name,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.UnicodeDecoder(),
+    ]
+    
+    if hippo_log:
+        # Parse log level from HIPPO_LOG environment variable
+        try:
+            log_level = getattr(logging, hippo_log.upper())
+        except AttributeError:
+            # If invalid level, default to INFO and log a warning
+            log_level = logging.INFO
+            print(f"Warning: Invalid log level '{hippo_log}', using INFO", file=sys.stderr)
+        
+        # Determine log file path - use memory_dir/hippo.log if memory_dir provided
+        if memory_dir:
+            log_file = memory_dir / "hippo.log"
+            # Ensure memory directory exists
+            memory_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            # Fallback to current directory if no memory_dir provided
+            log_file = Path("hippo.log")
+        
+        # Configure JSON output for file logging
+        processors.append(structlog.processors.JSONRenderer())
+        
+        # Set up stdlib logging to write to file
+        logging.basicConfig(
+            level=log_level,
+            format='%(message)s',  # Let structlog handle formatting
+            filename=str(log_file),  # Ensure it's a string path
+            filemode='a',  # Append mode
+            force=True  # Force reconfiguration of logging
+        )
+    else:
+        # Default to stderr with ERROR level only to minimize noise
+        # Use ConsoleRenderer for human-readable output in error cases
+        processors.append(structlog.dev.ConsoleRenderer())
+        
+        logging.basicConfig(
+            level=logging.ERROR,
+            format='%(message)s',  # Let structlog handle formatting
+            stream=sys.stderr
+        )
+    
+    # Configure structlog (clear any previous configuration)
+    structlog.configure(
+        processors=processors,
+        context_class=dict,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=False,  # Don't cache to allow reconfiguration
     )
-else:
-    # Default to stderr with ERROR level only to minimize noise
-    logging.basicConfig(
-        level=logging.ERROR,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        stream=sys.stderr
-    )
+    
+    return cast(structlog.BoundLogger, structlog.get_logger())
 
-logger = logging.getLogger(__name__)
+# Global cached logger instance
+_cached_logger: Optional[structlog.BoundLogger] = None
+
+
+def logger() -> structlog.BoundLogger:
+    """
+    Get or create the configured logger instance.
+    
+    This function lazily initializes the logger on first call based on
+    HIPPO_LOG environment variable and caches it for subsequent calls.
+    """
+    global _cached_logger
+    
+    if _cached_logger is None:
+        # First call - configure and create logger
+        hippo_log = os.environ.get('HIPPO_LOG')
+        
+        # Use memory directory from HIPPO_MEMORY_DIR env var if available
+        # This allows the logger to find the correct directory even before main() is called
+        memory_dir_env = os.environ.get('HIPPO_MEMORY_DIR')
+        memory_dir = Path(memory_dir_env) if memory_dir_env else None
+        
+        _cached_logger = setup_logging(memory_dir)
+    
+    return _cached_logger
 
 
 class HippoServer:
@@ -52,28 +131,33 @@ class HippoServer:
     
     def __init__(self, storage_path: Optional[Path] = None, *, storage: Optional[StorageProtocol] = None) -> None:
         """Initialize server with either storage path or storage instance."""
-        logger.info("Initializing HippoServer...")
+        logger().info("server.init.start", status="initializing")
         
         if storage is not None:
-            logger.debug("Using provided storage instance")
+            logger().debug("server.init.storage", storage_type="provided_instance")
             self.storage: StorageProtocol = storage
         elif storage_path is not None:
-            logger.info(f"Creating FileBasedStorage with directory: {storage_path}")
+            logger().info("server.init.storage", storage_type="file_based", path=str(storage_path))
             self.storage = FileBasedStorage(storage_path)
         else:
-            logger.error("No storage path or storage instance provided")
+            logger().error("server.init.error", error="no_storage_configured")
             raise ValueError("Must provide either storage_path or storage")
             
-        logger.debug("Initializing InsightSearcher...")
+        logger().debug("server.init.searcher", status="initializing")
         self.searcher = InsightSearcher()
         
-        logger.debug("Creating MCP Server instance...")
+        logger().debug("server.init.mcp", status="creating_server")
         self.server: Server[Any] = Server("hippo")
         
-        logger.info("Registering MCP tools...")
+        # 💡: Track tool call count for periodic metrics logging
+        # Log metrics every 10 tool calls to balance observability with log volume
+        self.tool_call_count = 0
+        self.metrics_interval = 10
+        
+        logger().info("server.init.tools", status="registering")
         # Register MCP tools
         self._register_tools()
-        logger.info("HippoServer initialization complete")
+        logger().info("server.init.complete", status="ready")
     
     def __enter__(self) -> 'HippoServer':
         """Context manager entry."""
@@ -87,12 +171,12 @@ class HippoServer:
     
     def _register_tools(self) -> None:
         """Register all MCP tools."""
-        logger.debug("Starting tool registration...")
+        logger().debug("server.tools.register", status="starting")
         
         @self.server.list_tools()  # type: ignore[misc,no-untyped-call]
         async def list_tools() -> List[Tool]:
             """List available tools."""
-            logger.debug("list_tools called")
+            logger().debug("server.tools.list", event="list_tools_called")
             return [
                 Tool(
                     name="hippo_record_insight",
@@ -245,28 +329,130 @@ class HippoServer:
         @self.server.call_tool()  # type: ignore[misc,no-untyped-call]
         async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             """Handle tool calls."""
-            logger.info(f"Tool called: {name} with arguments: {arguments}")
+            import time
+            start_time = time.time()
+            
+            # 💡: Log tool requests at INFO level with sanitized arguments for better metrics tracking
+            # Truncate large arguments to keep logs readable while preserving key information
+            def sanitize_value(val: Any) -> Any:
+                if isinstance(val, str) and len(val) > 100:
+                    return f"{val[:100]}..."
+                elif isinstance(val, list):
+                    if len(val) <= 5:
+                        # Small lists: sanitize each item individually
+                        return [sanitize_value(item) for item in val]
+                    else:
+                        # Large lists: show first 5 items with individual sanitization, then count
+                        sanitized_items = [sanitize_value(item) for item in val[:5]]
+                        return sanitized_items + [f"... +{len(val) - 5} more"]
+                else:
+                    return val
+            
+            sanitized_args = {key: sanitize_value(value) for key, value in arguments.items()}
+            
+            logger().info("tool.request", tool=name, args=sanitized_args)
             
             try:
+                result = None
                 if name == "hippo_record_insight":
-                    logger.debug("Calling _record_insight")
-                    return await self._record_insight(arguments)
+                    logger().debug("Calling _record_insight")
+                    result = await self._record_insight(arguments)
                 elif name == "hippo_search_insights":
-                    logger.debug("Calling _search_insights")
-                    return await self._search_insights(arguments)
+                    logger().debug("Calling _search_insights")
+                    result = await self._search_insights(arguments)
                 elif name == "hippo_modify_insight":
-                    logger.debug("Calling _modify_insight")
-                    return await self._modify_insight(arguments)
+                    logger().debug("Calling _modify_insight")
+                    result = await self._modify_insight(arguments)
                 elif name == "hippo_reinforce_insight":
-                    logger.debug("Calling _reinforce_insight")
-                    return await self._reinforce_insight(arguments)
+                    logger().debug("Calling _reinforce_insight")
+                    result = await self._reinforce_insight(arguments)
                 else:
-                    logger.warning(f"Unknown tool called: {name}")
-                    return [TextContent(type="text", text=f"Unknown tool: {name}")]
+                    logger().warning("tool.unknown", tool=name)
+                    result = [TextContent(type="text", text=f"Unknown tool: {name}")]
+                
+                # 💡: Log successful tool responses with timing for performance analysis
+                duration_ms = (time.time() - start_time) * 1000
+                result_summary = "success"
+                if result and len(result) > 0:
+                    # Extract key info from response for metrics
+                    text = result[0].text if hasattr(result[0], 'text') else str(result[0])
+                    if "Error" in text:
+                        result_summary = f"error: {text[:50]}..."
+                    elif "UUID:" in text:
+                        result_summary = "created_insight"
+                    elif "insights" in text:
+                        result_summary = "search_results"
+                    elif "Modified" in text:
+                        result_summary = "modified_insight"
+                    elif "reinforcement" in text:
+                        result_summary = "applied_reinforcement"
+                
+                logger().info("tool.response", tool=name, result=result_summary, duration_ms=round(duration_ms, 1))
+                
+                # 💡: Periodic metrics logging to track system health and usage patterns
+                # Only log metrics on successful tool calls to avoid noise from errors
+                self.tool_call_count += 1
+                if self.tool_call_count % self.metrics_interval == 0:
+                    await self._log_system_metrics()
+                
+                return result
                     
             except Exception as e:
-                logger.error(f"Error in tool {name}: {e}", exc_info=True)
+                duration_ms = (time.time() - start_time) * 1000
+                logger().error("tool.error", tool=name, error=str(e), duration_ms=round(duration_ms, 1), exc_info=True)
                 return [TextContent(type="text", text=f"Error in {name}: {str(e)}")]
+    
+    async def _log_system_metrics(self) -> None:
+        """Log system metrics for monitoring and analysis."""
+        try:
+            all_insights = await self.storage.get_all_insights()
+            current_active_day = await self.storage.get_current_active_day()
+            
+            # 💡: Calculate aggregate metrics from existing usage tracking infrastructure
+            # Leverage the sophisticated frequency/recency calculations already built into insights
+            total_insights = len(all_insights)
+            
+            # Calculate importance distribution
+            importance_scores = [insight.compute_current_importance() for insight in all_insights]
+            high_importance = len([s for s in importance_scores if s >= 0.8])
+            medium_importance = len([s for s in importance_scores if 0.4 <= s < 0.8])
+            low_importance = len([s for s in importance_scores if s < 0.4])
+            
+            # Calculate access patterns over recent window
+            recent_access_counts = []
+            total_accesses = 0
+            for insight in all_insights:
+                frequency = insight.calculate_frequency(current_active_day)
+                recent_access_counts.append(frequency)
+                # Sum all access counts from daily tracking
+                total_accesses += sum(count for _, count in insight.daily_access_counts)
+            
+            most_accessed = max(recent_access_counts) if recent_access_counts else 0
+            avg_frequency = sum(recent_access_counts) / len(recent_access_counts) if recent_access_counts else 0
+            
+            # Calculate recency distribution
+            recency_scores = [insight.calculate_recency_score(current_active_day) for insight in all_insights]
+            recently_accessed = len([s for s in recency_scores if s > 0.5])
+            
+            logger().info(
+                "system.metrics",
+                total_insights=total_insights,
+                active_day=current_active_day,
+                total_accesses=total_accesses,
+                importance_distribution={
+                    "high": high_importance,
+                    "medium": medium_importance,
+                    "low": low_importance
+                },
+                access_frequency={
+                    "average": round(avg_frequency, 2),
+                    "max": round(most_accessed, 2)
+                },
+                recently_accessed=recently_accessed
+            )
+            
+        except Exception as e:
+            logger().error("system.metrics.error", error=str(e), exc_info=True)
     
     async def _record_insight(self, args: Dict[str, Any]) -> List[TextContent]:
         """Record a new insight."""
@@ -434,16 +620,16 @@ class HippoServer:
     
     async def run(self) -> None:
         """Run the MCP server."""
-        logger.info("Starting MCP server...")
+        logger().info("server.run.start", status="starting")
         try:
             # 💡: Using create_initialization_options() like the official examples
             # This sets up proper server capabilities and initialization parameters
             options = self.server.create_initialization_options()
             async with stdio_server() as (read_stream, write_stream):
-                logger.info("MCP server connected, entering main loop...")
+                logger().info("server.run.connected", status="connected", mode="stdio")
                 await self.server.run(read_stream, write_stream, options, raise_exceptions=True)
         except Exception as e:
-            logger.error(f"Error running MCP server: {e}")
+            logger().error("server.run.error", error=str(e), exc_info=True)
             raise
 
 
@@ -456,20 +642,35 @@ class HippoServer:
 )
 def main(memory_dir: Path) -> None:
     """Run the Hippo MCP server."""
-    log_destination = os.environ.get('HIPPO_LOG', 'stderr')
-    logger.info(f"Starting Hippo MCP server with storage directory: {memory_dir}")
-    logger.info(f"Logging to: {log_destination}")
+    # Set HIPPO_MEMORY_DIR environment variable so logger() can find it
+    os.environ['HIPPO_MEMORY_DIR'] = str(memory_dir)
+    
+    hippo_log = os.environ.get('HIPPO_LOG')
+    if hippo_log:
+        log_destination = f"{memory_dir}/hippo.log"
+        log_format = "JSON"
+    else:
+        log_destination = "stderr"
+        log_format = "console"
+    
+    logger().info(
+        "hippo.main.start",
+        memory_dir=str(memory_dir),
+        log_level=hippo_log or "ERROR",
+        log_destination=log_destination,
+        log_format=log_format
+    )
     
     try:
         # Ensure the parent directory exists
         memory_dir.parent.mkdir(parents=True, exist_ok=True)
-        logger.debug(f"Ensured parent directory exists: {memory_dir.parent}")
+        logger().debug("hippo.main.dir_check", parent_dir=str(memory_dir.parent), status="exists")
         
         server = HippoServer(memory_dir)
-        logger.info("Server created successfully, starting asyncio loop...")
+        logger().info("hippo.main.server_created", status="ready")
         asyncio.run(server.run())
     except Exception as e:
-        logger.error(f"Failed to start server: {e}")
+        logger().error("hippo.main.error", error=str(e), exc_info=True)
         sys.exit(1)
 
 
