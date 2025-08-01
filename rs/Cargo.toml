@@ -1,0 +1,61 @@
+[package]
+name = "hippo"
+version = "0.1.0"
+edition = "2021"
+authors = ["Niko Matsakis <niko@alum.mit.edu>"]
+description = "AI-Generated Insights Memory System - Rust implementation"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/socratic-shell/hippo"
+
+[lib]
+name = "hippo"
+path = "src/lib.rs"
+
+[[bin]]
+name = "hippo-server"
+path = "src/main.rs"
+
+[dependencies]
+# Core async runtime
+tokio = { version = "1.0", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Date/time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# UUID generation
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# File system operations
+notify = "6.0"
+
+# Async traits
+async-trait = "0.1"
+
+# CLI parsing (for standalone server)
+clap = { version = "4.0", features = ["derive"] }
+
+# FastEmbed for sentence transformers
+fastembed = "5.0"
+
+# MCP SDK - TODO: Add when available
+# mcp-sdk = "0.1"
+
+[dev-dependencies]
+# Testing
+tokio-test = "0.4"
+tempfile = "3.0"
+
+[features]
+default = []

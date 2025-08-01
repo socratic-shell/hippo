@@ -1,0 +1,12 @@
+{
+  "uuid": "e3fc03e2-5da0-4dca-ae23-4da4b44d104e",
+  "content": "Rust port validation test",
+  "situation": [
+    "testing",
+    "rust port"
+  ],
+  "base_importance": 0.7,
+  "current_importance": 0.7,
+  "created_at": "2025-08-01T10:18:05.460268Z",
+  "importance_modified_at": "2025-08-01T10:18:05.460268Z"
+}
