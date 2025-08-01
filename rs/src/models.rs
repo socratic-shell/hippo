@@ -6,6 +6,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use schemars::JsonSchema;
 
 /// Unique identifier for insights
 pub type InsightId = Uuid;
@@ -185,4 +186,98 @@ mod tests {
         assert!(insight.days_since_created() < 0.001);
         assert!(insight.days_since_importance_modified() < 0.001);
     }
+}
+
+// MCP Tool Parameter Structs
+
+/// Parameters for recording a new insight
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct RecordInsightParams {
+    /// The insight content - should be atomic and actionable
+    pub content: String,
+    /// Array of independent situational aspects describing when/where this insight occurred
+    pub situation: Vec<String>,
+    /// AI-assessed importance rating: 0.8+ breakthrough insights, 0.6-0.7 useful decisions, 0.4-0.5 incremental observations, 0.1-0.3 routine details
+    pub importance: f64,
+}
+
+/// Parameters for searching insights
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SearchInsightsParams {
+    /// Search query for insight content
+    pub query: String,
+    /// Filter results by matching any situation elements using partial matching
+    #[serde(default)]
+    pub situation_filter: Option<Vec<String>>,
+    /// Relevance range filter
+    #[serde(default)]
+    pub relevance_range: Option<RelevanceRange>,
+    /// Result pagination
+    #[serde(default)]
+    pub limit: Option<PaginationLimit>,
+}
+
+/// Relevance range filter
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct RelevanceRange {
+    #[serde(default = "default_min_relevance")]
+    pub min: f64,
+    pub max: Option<f64>,
+}
+
+fn default_min_relevance() -> f64 {
+    0.1
+}
+
+/// Pagination parameters
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct PaginationLimit {
+    #[serde(default)]
+    pub offset: usize,
+    #[serde(default = "default_count")]
+    pub count: usize,
+}
+
+fn default_count() -> usize {
+    10
+}
+
+/// Parameters for modifying an existing insight
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ModifyInsightParams {
+    /// UUID of the insight to modify
+    pub uuid: InsightId,
+    /// New insight content (optional - only provide if changing)
+    pub content: Option<String>,
+    /// New situational aspects array (optional - only provide if changing)
+    pub situation: Option<Vec<String>>,
+    /// New importance rating (optional - only provide if changing)
+    pub importance: Option<f64>,
+    /// Reinforcement to apply with modification
+    #[serde(default = "default_reinforce")]
+    pub reinforce: ReinforcementType,
+}
+
+/// Parameters for reinforcement feedback
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ReinforceInsightParams {
+    /// Array of UUIDs to upvote (1.5x importance multiplier)
+    #[serde(default)]
+    pub upvotes: Vec<InsightId>,
+    /// Array of UUIDs to downvote (0.5x importance multiplier)
+    #[serde(default)]
+    pub downvotes: Vec<InsightId>,
+}
+
+/// Reinforcement type for modifications
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum ReinforcementType {
+    Upvote,
+    Downvote,
+    None,
+}
+
+fn default_reinforce() -> ReinforcementType {
+    ReinforcementType::Upvote
 }
