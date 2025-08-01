@@ -160,7 +160,7 @@ class HippoServer:
         @self.server.list_tools()  # type: ignore[misc,no-untyped-call]
         async def list_tools() -> List[Tool]:
             """List available tools."""
-            self.logger.debug("server.tools.list", event="list_tools_called")
+            self.logger.debug("server.tools.list", status="listing")
             return [
                 Tool(
                     name="hippo_record_insight",
@@ -627,7 +627,7 @@ class HippoServer:
 def main(memory_dir: Path) -> None:
     """Run the Hippo MCP server."""
     global _logger
-    
+
     # 💡: Initialize logger first thing in main() to avoid environment variable dependency
     # This ensures proper initialization order and eliminates the need for HIPPO_MEMORY_DIR env var
     _logger = setup_logging(memory_dir)
