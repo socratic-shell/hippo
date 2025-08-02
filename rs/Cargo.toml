@@ -40,6 +40,7 @@ thiserror = { workspace = true }
 # Logging
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+tracing-appender = "0.2"
 
 # File system operations
 notify = { workspace = true }

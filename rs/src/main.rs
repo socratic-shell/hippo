@@ -17,7 +17,7 @@ use rmcp::{
     ErrorData as McpError, ServerHandler, ServiceExt,
 };
 use tokio::sync::Mutex;
-use tracing_subscriber::{self, EnvFilter};
+use tracing_subscriber::{self, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use hippo::{
     models::{
@@ -274,16 +274,26 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     // Initialize logging
-    let log_level = if args.debug { "debug" } else { "info" };
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::from_default_env()
-                .add_directive(format!("hippo={log_level}").parse()?)
-                .add_directive("fastembed=info".parse()?),
-        )
-        .with_writer(std::io::stderr)
-        .with_ansi(false)
+    let log_level = std::env::var("HIPPO_LOG")
+        .unwrap_or_else(|_| if args.debug { "debug" } else { "info" }.to_string());
+    
+    // Create log file in memory directory
+    let log_file = tracing_appender::rolling::never(&args.memory_dir, "hippo.log");
+    let (non_blocking_file, _guard) = tracing_appender::non_blocking(log_file);
+    
+    // Set up logging to both console and file
+    let env_filter = EnvFilter::from_default_env()
+        .add_directive(format!("hippo={log_level}").parse()?)
+        .add_directive("fastembed=info".parse()?);
+    
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))  // Console output
+        .with(tracing_subscriber::fmt::layer().with_writer(non_blocking_file).with_ansi(false))  // File output
+        .with(env_filter)
         .init();
+    
+    // Keep the guard alive for the duration of the program
+    std::mem::forget(_guard);
 
     tracing::info!("Starting Hippo MCP Server v{}", hippo::VERSION);
     tracing::info!("Memory directory: {}", args.memory_dir.display());
