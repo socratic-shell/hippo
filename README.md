@@ -30,20 +30,24 @@ uv run python -m hippo.server --help
 
 ### 2. Quick Development Setup
 
-For Q CLI users, use the automated setup script:
+For Q CLI users, use the automated setup tool:
 
 ```bash
-# Automatic setup with defaults
-python setup-dev.py
+# Automatic setup with defaults (production mode)
+cargo setup
+
+# Development mode (builds to target/ for fast iteration)
+cargo setup --dev
 
 # Custom memory location
-python setup-dev.py --memory-dir ~/my-project/hippo-memories
+cargo setup --memory-dir ~/my-project/hippo-memories
 
 # See all options
-python setup-dev.py --help
+cargo setup --help
 ```
 
-This script will:
+This tool will:
+- Build/install the Rust Hippo server
 - Register Hippo as a global MCP server in Q CLI
 - Create the memory storage directory
 - Provide instructions for adding the guidance context
@@ -55,20 +59,19 @@ This script will:
 # Create data directory
 mkdir -p ~/.hippo
 
+# Build the Rust server
+cargo build --release --manifest-path rs/Cargo.toml
+
 # Add server (replace /path/to/hippo with your actual path)
 q mcp add \
   --name hippo \
-  --command uv \
-  --args run \
-  --args --directory \
-  --args /path/to/hippo \
-  --args python \
-  --args -m \
-  --args hippo.server \
+  --command /path/to/hippo/rs/target/release/hippo-server \
   --args --memory-dir \
-  --args ~/.hippo
+  --args ~/.hippo \
+  --env HIPPO_LOG=info \
+  --force
 
-# Add guidance to your CLAUDE.md or global context
+# Add guidance to your agent definition
 # @/path/to/hippo/guidance.md
 ```
 
@@ -77,17 +80,14 @@ q mcp add \
 {
   "mcpServers": {
     "hippo": {
-      "command": "uv",
+      "command": "/path/to/hippo/rs/target/release/hippo-server",
       "args": [
-        "run", 
-        "--directory", 
-        "/path/to/hippo", 
-        "python", 
-        "-m", 
-        "hippo.server", 
         "--memory-dir", 
         "~/.hippo"
-      ]
+      ],
+      "env": {
+        "HIPPO_LOG": "info"
+      }
     }
   }
 }
