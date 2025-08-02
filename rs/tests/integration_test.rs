@@ -48,8 +48,8 @@ async fn test_storage_integration() {
     let updated1 = storage.get_insight(insight1.uuid).await.unwrap().unwrap();
     let updated2 = storage.get_insight(insight2.uuid).await.unwrap().unwrap();
 
-    assert_eq!(updated1.current_importance, 1.0); // 0.8 * 1.5, capped at 1.0
-    assert_eq!(updated2.current_importance, 0.35); // 0.7 * 0.5
+    assert_eq!(updated1.importance, 1.0); // 0.8 * 1.5, capped at 1.0
+    assert_eq!(updated2.importance, 0.35); // 0.7 * 0.5
 }
 
 /// Test search engine creation and basic operations (without model)
@@ -104,7 +104,7 @@ async fn test_json_compatibility() {
     assert!(json.contains("\"content\""));
     assert!(json.contains("\"situation\""));
     assert!(json.contains("\"base_importance\""));
-    assert!(json.contains("\"current_importance\""));
+    assert!(json.contains("\"importance\""));
     assert!(json.contains("\"created_at\""));
     assert!(json.contains("\"importance_modified_at\""));
 

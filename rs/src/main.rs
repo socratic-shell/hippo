@@ -208,7 +208,7 @@ impl HippoServer {
                 ));
             }
             insight.base_importance = importance;
-            insight.current_importance = importance;
+            insight.importance = importance;
         }
 
         // Apply reinforcement

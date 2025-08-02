@@ -444,13 +444,13 @@ mod tests {
         storage.apply_reinforcement(vec![id], vec![]).await.unwrap();
 
         let updated = storage.get_insight(id).await.unwrap().unwrap();
-        assert!((updated.current_importance - 0.9).abs() < 1e-10); // 0.6 * 1.5
+        assert!((updated.importance - 0.9).abs() < 1e-10); // 0.6 * 1.5
 
         // Apply downvote
         storage.apply_reinforcement(vec![], vec![id]).await.unwrap();
 
         let updated = storage.get_insight(id).await.unwrap().unwrap();
-        assert!((updated.current_importance - 0.45).abs() < 1e-10); // 0.9 * 0.5
+        assert!((updated.importance - 0.45).abs() < 1e-10); // 0.9 * 0.5
     }
 
     #[tokio::test]
