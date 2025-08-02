@@ -3,7 +3,7 @@
 //! Provides JSON-compatible storage that can read existing Python-generated memories
 //! and maintain the same file format for seamless migration.
 
-use crate::models::{HippoStorage, Insight, InsightId};
+use crate::models::{HippoMetadata, HippoStorage, Insight, InsightId};
 use anyhow::{Context, Result};
 use serde_json;
 use std::collections::HashMap;
@@ -41,6 +41,9 @@ pub struct FileStorage {
 
     /// Whether the cache has been loaded
     cache_loaded: RwLock<bool>,
+    
+    /// Metadata cache (active day counter, etc.)
+    metadata_cache: RwLock<Option<HippoMetadata>>,
 }
 
 impl FileStorage {
@@ -67,12 +70,18 @@ impl FileStorage {
             storage_dir,
             cache: RwLock::new(HashMap::new()),
             cache_loaded: RwLock::new(false),
+            metadata_cache: RwLock::new(None),
         })
     }
 
     /// Get the file path for an insight
     fn insight_path(&self, id: InsightId) -> PathBuf {
         self.storage_dir.join(format!("{id}.json"))
+    }
+    
+    /// Get the file path for metadata
+    fn metadata_path(&self) -> PathBuf {
+        self.storage_dir.join("metadata.json")
     }
 
     /// Load all insights into cache if not already loaded
@@ -128,6 +137,65 @@ impl FileStorage {
         *cache_loaded_guard = true;
         Ok(())
     }
+    
+    /// Load metadata from file, creating default if it doesn't exist
+    async fn load_metadata(&self) -> Result<HippoMetadata, StorageError> {
+        let mut metadata_guard = self.metadata_cache.write().await;
+        
+        if let Some(ref metadata) = *metadata_guard {
+            return Ok(metadata.clone());
+        }
+        
+        let metadata_path = self.metadata_path();
+        
+        let metadata = if metadata_path.exists() {
+            match fs::read_to_string(&metadata_path).await {
+                Ok(content) => {
+                    match serde_json::from_str::<HippoMetadata>(&content) {
+                        Ok(metadata) => metadata,
+                        Err(e) => {
+                            tracing::warn!("Failed to parse metadata file, using defaults: {}", e);
+                            // Backup corrupted file
+                            let backup_path = metadata_path.with_extension("json.backup");
+                            if let Err(backup_err) = fs::rename(&metadata_path, &backup_path).await {
+                                tracing::warn!("Failed to backup corrupted metadata: {}", backup_err);
+                            }
+                            HippoMetadata::default()
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to read metadata file: {}", e);
+                    HippoMetadata::default()
+                }
+            }
+        } else {
+            HippoMetadata::default()
+        };
+        
+        *metadata_guard = Some(metadata.clone());
+        Ok(metadata)
+    }
+    
+    /// Save metadata to file atomically
+    async fn save_metadata(&self, metadata: &HippoMetadata) -> Result<(), StorageError> {
+        let metadata_path = self.metadata_path();
+        let temp_path = metadata_path.with_extension("json.tmp");
+        
+        let content = serde_json::to_string_pretty(metadata)
+            .map_err(StorageError::Json)?;
+            
+        fs::write(&temp_path, content).await
+            .map_err(StorageError::Io)?;
+            
+        fs::rename(&temp_path, &metadata_path).await
+            .map_err(StorageError::Io)?;
+            
+        // Update cache
+        *self.metadata_cache.write().await = Some(metadata.clone());
+        
+        Ok(())
+    }
 
     /// Load a single insight from a file
     async fn load_insight_from_file(&self, path: &Path) -> Result<Insight, StorageError> {
@@ -142,6 +210,17 @@ impl FileStorage {
         let content = serde_json::to_string_pretty(insight)?;
         fs::write(path, content).await?;
         Ok(())
+    }
+    
+    /// Get the current active day, incrementing if it's a new calendar day
+    pub async fn get_current_active_day(&self) -> Result<u32, StorageError> {
+        let mut metadata = self.load_metadata().await?;
+        let current_day = metadata.get_current_active_day();
+        
+        // Save metadata if it was updated (new day)
+        self.save_metadata(&metadata).await?;
+        
+        Ok(current_day)
     }
 }
 
@@ -233,6 +312,30 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let storage = FileStorage::new(temp_dir.path()).await.unwrap();
         (storage, temp_dir)
+    }
+
+    #[tokio::test]
+    async fn test_metadata_active_day() {
+        let temp_dir = TempDir::new().unwrap();
+        let storage = FileStorage::new(temp_dir.path()).await.unwrap();
+        
+        // First call should return day 1
+        let day1 = storage.get_current_active_day().await.unwrap();
+        assert_eq!(day1, 1);
+        
+        // Second call on same day should return same day
+        let day1_again = storage.get_current_active_day().await.unwrap();
+        assert_eq!(day1_again, 1);
+        
+        // Check that metadata file was created
+        let metadata_path = temp_dir.path().join("metadata.json");
+        assert!(metadata_path.exists());
+        
+        // Check metadata content
+        let content = std::fs::read_to_string(&metadata_path).unwrap();
+        let metadata: HippoMetadata = serde_json::from_str(&content).unwrap();
+        assert_eq!(metadata.active_day_counter, 1);
+        assert!(metadata.last_calendar_date_used.is_some());
     }
 
     #[tokio::test]

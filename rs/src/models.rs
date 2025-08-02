@@ -3,7 +3,7 @@
 //! These models maintain JSON compatibility with the Python implementation
 //! to ensure seamless migration of existing memories.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -276,4 +276,49 @@ pub enum ReinforcementType {
 
 fn default_reinforce() -> ReinforcementType {
     ReinforcementType::Upvote
+}
+
+/// Metadata for tracking global state like logical days
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HippoMetadata {
+    /// Logical day counter that increments each calendar day
+    pub active_day_counter: u32,
+    
+    /// Last calendar date when the system was used (ISO format)
+    pub last_calendar_date_used: Option<String>,
+}
+
+impl Default for HippoMetadata {
+    fn default() -> Self {
+        Self {
+            active_day_counter: 0,
+            last_calendar_date_used: None,
+        }
+    }
+}
+
+impl HippoMetadata {
+    /// Get the current active day, incrementing if it's a new calendar day
+    pub fn get_current_active_day(&mut self) -> u32 {
+        let today = chrono::Utc::now().date_naive();
+        let today_str = today.to_string();
+        
+        // Check if this is a new calendar day
+        let is_new_day = match &self.last_calendar_date_used {
+            None => true,
+            Some(last_date_str) => {
+                match NaiveDate::parse_from_str(last_date_str, "%Y-%m-%d") {
+                    Ok(last_date) => last_date != today,
+                    Err(_) => true, // If we can't parse, treat as new day
+                }
+            }
+        };
+        
+        if is_new_day {
+            self.active_day_counter += 1;
+            self.last_calendar_date_used = Some(today_str);
+        }
+        
+        self.active_day_counter
+    }
 }
