@@ -21,3 +21,6 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+
+# Rust build artifacts
+rs/target/
