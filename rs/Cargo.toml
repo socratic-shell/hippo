@@ -51,7 +51,7 @@ clap = { version = "4.0", features = ["derive"] }
 fastembed = "5.0"
 
 # MCP SDK
-rmcp = { version = "0.3", features = ["server", "macros", "transport-io"] }
+rmcp = { version = "0.3", features = ["server", "macros", "transport-io", "client", "transport-child-process"] }
 
 [dev-dependencies]
 # Testing
