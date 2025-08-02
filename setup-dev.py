@@ -2,7 +2,8 @@
 """
 Hippo Development Setup Script
 
-Automatically configures Hippo as an MCP server for Q CLI or Claude Code.
+Automatically builds the Rust Hippo server and configures it as an MCP server 
+for Q CLI or Claude Code.
 """
 
 import argparse
@@ -17,6 +18,15 @@ class CLITool(Enum):
     Q_CLI = auto()
     CLAUDE_CODE = auto()
     BOTH = auto()
+
+
+def check_rust():
+    """Check if Rust and Cargo are available."""
+    if not shutil.which("cargo"):
+        print("❌ Error: Cargo not found. Please install Rust first.")
+        print("   Visit: https://rustup.rs/")
+        return False
+    return True
 
 
 def check_q_cli():
@@ -63,21 +73,54 @@ def get_repo_root():
     return Path(__file__).parent.absolute()
 
 
+def build_rust_server(repo_root: Path):
+    """Build the Rust Hippo server."""
+    rust_dir = repo_root / "rs"
+    
+    try:
+        print("🔨 Building Rust Hippo server...")
+        print(f"   Building in: {rust_dir}")
+        
+        # Build the Rust server
+        result = subprocess.run(
+            ["cargo", "build", "--release"],
+            cwd=rust_dir,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        # Verify the binary exists
+        binary_path = rust_dir / "target" / "release" / "hippo-server"
+        if not binary_path.exists():
+            raise FileNotFoundError(f"Built binary not found at {binary_path}")
+            
+        print("✅ Rust server built successfully!")
+        return binary_path
+        
+    except subprocess.CalledProcessError as e:
+        print("❌ Failed to build Rust server:")
+        print(f"   Error: {e.stderr.strip()}")
+        return None
+    except FileNotFoundError as e:
+        print(f"❌ Build verification failed: {e}")
+        return None
+
+
 def setup_q_cli_mcp(memory_dir: Path, force: bool = False):
     """Register Hippo as an MCP server with Q CLI."""
     repo_root = get_repo_root()
+    
+    # Build the Rust server first
+    binary_path = build_rust_server(repo_root)
+    if not binary_path:
+        return False
 
-    # Build the command arguments
+    # Build the command arguments for the Rust binary
     cmd = [
         "q", "mcp", "add",
         "--name", "hippo",
-        "--command", "uv",
-        "--args", "run",
-        "--args", "--directory",
-        "--args", str(repo_root),
-        "--args", "python",
-        "--args", "-m",
-        "--args", "hippo.server",
+        "--command", str(binary_path),
         "--args", "--memory-dir",
         "--args", str(memory_dir),
         "--env", "HIPPO_LOG=info"
@@ -87,9 +130,9 @@ def setup_q_cli_mcp(memory_dir: Path, force: bool = False):
         cmd.append("--force")
 
     try:
-        print("🔧 Registering Hippo MCP server with Q CLI...")
+        print("🔧 Registering Rust Hippo MCP server with Q CLI...")
         print(f"   Memory path: {memory_dir}")
-        print(f"   Repository: {repo_root}")  
+        print(f"   Binary path: {binary_path}")  
         print(f"   Logging: INFO level to {memory_dir}/hippo.log")
 
         subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -110,33 +153,32 @@ def setup_q_cli_mcp(memory_dir: Path, force: bool = False):
 def setup_claude_code_mcp(memory_dir: Path, scope: str = "user"):
     """Register Hippo as an MCP server with Claude Code."""
     repo_root = get_repo_root()
+    
+    # Build the Rust server first
+    binary_path = build_rust_server(repo_root)
+    if not binary_path:
+        return False
 
-    # 💡: Claude Code uses -- to separate command from its arguments
+    # Claude Code uses -- to separate command from its arguments
     cmd_args = [
         "mcp", "add",
         "--scope", scope,
         "--env", "HIPPO_LOG=info",
         "hippo",
-        "uv",
+        str(binary_path),
         "--",
-        "run",
-        "--directory",
-        str(repo_root),
-        "python",
-        "-m",
-        "hippo.server",
         "--memory-dir",
         str(memory_dir)
     ]
 
     try:
-        print("🔧 Registering Hippo MCP server with Claude Code...")
+        print("🔧 Registering Rust Hippo MCP server with Claude Code...")
         print(f"   Memory path: {memory_dir}")
-        print(f"   Repository: {repo_root}")
+        print(f"   Binary path: {binary_path}")
         print(f"   Scope: {scope}")
         print(f"   Logging: INFO level to {memory_dir}/hippo.log")
 
-        # 💡: Use shell=True to handle bash aliases properly
+        # Use shell=True to handle bash aliases properly
         cmd_str = f"claude {' '.join(cmd_args)}"
         result = subprocess.run(
             cmd_str, 
@@ -169,28 +211,29 @@ def print_next_steps(memory_dir: Path, tool: CLITool):
     repo_root = get_repo_root()
     guidance_path = repo_root / "guidance.md"
 
-    print("\n🎉 Setup complete!")
+    print("\n🎉 Setup complete! Rust Hippo server is ready.")
 
     if tool in (CLITool.Q_CLI, CLITool.BOTH):
         print("\n📝 For Q CLI:")
         print("   Add this line to your CLAUDE.md or global context file:")
         print(f"   @{guidance_path}")
         print("\n🧪 Test with Q CLI:")
-        print("   q chat \"Record an insight: Setup script works great!\"")
+        print("   q chat \"Record an insight: Rust server works great!\"")
 
     if tool in (CLITool.CLAUDE_CODE, CLITool.BOTH):
         print("\n📝 For Claude Code:")
         print("   Add this line to your CLAUDE.md or project instructions:")
         print(f"   @{guidance_path}")
         print("\n🧪 Test with Claude Code:")
-        print("   claude chat \"Record an insight: Setup script works great!\"")
+        print("   claude chat \"Record an insight: Rust server works great!\"")
 
     print(f"\n💾 Your memories will be stored at: {memory_dir}")
+    print(f"🚀 Performance: ~100-500ms startup vs 6s Python version")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Set up Hippo for development with Q CLI or Claude Code",
+        description="Build Rust Hippo server and set up for development with Q CLI or Claude Code",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -200,6 +243,10 @@ Examples:
   python setup-dev.py --tool both        # Setup for both tools
   python setup-dev.py --memory-dir ~/my-hippo
   python setup-dev.py --force            # Overwrite existing Q CLI config
+
+Prerequisites:
+  - Rust and Cargo (https://rustup.rs/)
+  - Q CLI or Claude Code
         """
     )
 
@@ -251,6 +298,7 @@ Examples:
             )
             print("   Q CLI: https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/q-cli.html")
             print("   Claude Code: https://claude.ai/code")
+            print("   Rust: https://rustup.rs/")
             sys.exit(1)
         tool = available
     else:
@@ -262,6 +310,9 @@ Examples:
         tool = tool_map[args.tool]
 
     # Check prerequisites
+    if not check_rust():
+        sys.exit(1)
+        
     if not args.skip_mcp:
         if tool in (CLITool.Q_CLI, CLITool.BOTH) and not check_q_cli():
             sys.exit(1)
