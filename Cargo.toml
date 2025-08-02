@@ -3,10 +3,7 @@ members = ["rs", "setup"]
 resolver = "2"
 
 [workspace.lints.clippy]
-# Allow format string style preference - this is purely cosmetic
-uninlined_format_args = "allow"
-
-# We want to keep other clippy lints strict (lower priority so specific lints can override)
+# We want to keep clippy lints strict
 all = { level = "warn", priority = -1 }
 
 [workspace.dependencies]
