@@ -307,6 +307,10 @@ fn setup_q_cli_mcp(memory_dir: &Path, dev_mode: bool) -> Result<bool> {
         install_rust_server(&repo_root)?
     };
 
+    // Set log level based on mode
+    let log_level = if dev_mode { "debug" } else { "info" };
+    let log_env = format!("HIPPO_LOG={}", log_level);
+
     // Build the command arguments for the Rust binary
     let mut cmd = Command::new("q");
     cmd.args([
@@ -321,7 +325,7 @@ fn setup_q_cli_mcp(memory_dir: &Path, dev_mode: bool) -> Result<bool> {
         "--args",
         &memory_dir.to_string_lossy(),
         "--env",
-        "HIPPO_LOG=info",
+        &log_env,
         "--force", // Always overwrite existing configuration
     ]);
 
@@ -329,7 +333,8 @@ fn setup_q_cli_mcp(memory_dir: &Path, dev_mode: bool) -> Result<bool> {
     println!("   Memory path: {}", memory_dir.display());
     println!("   Binary path: {}", binary_path.display());
     println!(
-        "   Logging: INFO level to {}/hippo.log",
+        "   Logging: {} level to {}/hippo.log",
+        log_level.to_uppercase(),
         memory_dir.display()
     );
 
@@ -356,6 +361,10 @@ fn setup_claude_code_mcp(memory_dir: &Path, scope: &ClaudeScope, dev_mode: bool)
         install_rust_server(&repo_root)?
     };
 
+    // Set log level based on mode
+    let log_level = if dev_mode { "debug" } else { "info" };
+    let log_env = format!("HIPPO_LOG={}", log_level);
+
     let scope_str = match scope {
         ClaudeScope::User => "user",
         ClaudeScope::Local => "local",
@@ -370,7 +379,7 @@ fn setup_claude_code_mcp(memory_dir: &Path, scope: &ClaudeScope, dev_mode: bool)
         "--scope",
         scope_str,
         "--env",
-        "HIPPO_LOG=info",
+        &log_env,
         "hippo",
         &binary_path.to_string_lossy(),
         "--",
@@ -383,7 +392,8 @@ fn setup_claude_code_mcp(memory_dir: &Path, scope: &ClaudeScope, dev_mode: bool)
     println!("   Binary path: {}", binary_path.display());
     println!("   Scope: {scope_str}");
     println!(
-        "   Logging: INFO level to {}/hippo.log",
+        "   Logging: {} level to {}/hippo.log",
+        log_level.to_uppercase(),
         memory_dir.display()
     );
 
