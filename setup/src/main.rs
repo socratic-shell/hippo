@@ -71,8 +71,6 @@ struct Args {
     /// Use development mode (build in target/ directory instead of installing to PATH)
     #[arg(long)]
     dev: bool,
-
-
 }
 
 fn default_memory_dir() -> PathBuf {
@@ -169,7 +167,8 @@ fn check_claude_code() -> Result<()> {
 
 fn is_claude_available() -> bool {
     // Check both binary and config directory since claude might be an alias
-    which::which("claude").is_ok() || home::home_dir().map_or(false, |home| home.join(".claude").exists())
+    which::which("claude").is_ok()
+        || home::home_dir().is_some_and(|home| home.join(".claude").exists())
 }
 
 fn detect_available_tools() -> Result<CLITool> {
@@ -187,15 +186,15 @@ fn detect_available_tools() -> Result<CLITool> {
 }
 
 fn get_repo_root() -> Result<PathBuf> {
-    let current_exe = std::env::current_exe()
-        .context("Failed to get current executable path")?;
-    
+    let current_exe = std::env::current_exe().context("Failed to get current executable path")?;
+
     // Navigate up from target/debug/setup or target/release/setup to repo root
-    let mut path = current_exe.parent()
+    let mut path = current_exe
+        .parent()
         .and_then(|p| p.parent()) // target/
         .and_then(|p| p.parent()) // repo root
         .ok_or_else(|| anyhow!("Could not determine repository root"))?;
-    
+
     // If we're running via cargo run, we might be in a different location
     // Try to find Cargo.toml in current dir or parents
     let mut current = std::env::current_dir().context("Failed to get current directory")?;
@@ -210,40 +209,46 @@ fn get_repo_root() -> Result<PathBuf> {
             break;
         }
     }
-    
+
     Ok(path.to_path_buf())
 }
 
 fn install_rust_server(repo_root: &Path) -> Result<PathBuf> {
     let rust_dir = repo_root.join("rs");
-    
+
     println!("📦 Installing Rust Hippo server to PATH...");
     println!("   Installing from: {}", rust_dir.display());
-    
+
     // Install the Rust server to ~/.cargo/bin
     let output = Command::new("cargo")
         .args(["install", "--path", ".", "--force"])
         .current_dir(&rust_dir)
         .output()
         .context("Failed to execute cargo install")?;
-    
+
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(anyhow!("❌ Failed to install Rust server:\n   Error: {}", stderr.trim()));
+        return Err(anyhow!(
+            "❌ Failed to install Rust server:\n   Error: {}",
+            stderr.trim()
+        ));
     }
-    
+
     // The binary should now be available as 'hippo-server' in PATH
     let binary_name = "hippo-server";
-    
+
     // Verify the binary is accessible
     if which::which(binary_name).is_err() {
         println!("⚠️  Warning: hippo-server not found in PATH after installation");
-        
+
         // Try to give helpful guidance about PATH
         if let Some(home) = home::home_dir() {
             let cargo_bin = home.join(".cargo").join("bin");
-            println!("   Make sure {} is in your PATH environment variable", cargo_bin.display());
-            
+            println!(
+                "   Make sure {} is in your PATH environment variable",
+                cargo_bin.display()
+            );
+
             // Check if ~/.cargo/bin exists but isn't in PATH
             if cargo_bin.exists() {
                 println!("   Add this to your shell profile (.bashrc, .zshrc, etc.):");
@@ -253,68 +258,83 @@ fn install_rust_server(repo_root: &Path) -> Result<PathBuf> {
             println!("   Make sure ~/.cargo/bin is in your PATH environment variable");
         }
     }
-    
+
     println!("✅ Rust server installed successfully!");
     Ok(PathBuf::from(binary_name))
 }
 
 fn build_rust_server(repo_root: &Path) -> Result<PathBuf> {
     let rust_dir = repo_root.join("rs");
-    
+
     println!("🔨 Building Rust Hippo server for development...");
     println!("   Building in: {}", rust_dir.display());
-    
+
     // Build the Rust server
     let output = Command::new("cargo")
         .args(["build", "--release"])
         .current_dir(&rust_dir)
         .output()
         .context("Failed to execute cargo build")?;
-    
+
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(anyhow!("❌ Failed to build Rust server:\n   Error: {}", stderr.trim()));
+        return Err(anyhow!(
+            "❌ Failed to build Rust server:\n   Error: {}",
+            stderr.trim()
+        ));
     }
-    
+
     // Verify the binary exists
     let binary_path = rust_dir.join("target").join("release").join("hippo-server");
     if !binary_path.exists() {
-        return Err(anyhow!("❌ Build verification failed: Built binary not found at {}", binary_path.display()));
+        return Err(anyhow!(
+            "❌ Build verification failed: Built binary not found at {}",
+            binary_path.display()
+        ));
     }
-    
+
     println!("✅ Rust server built successfully!");
     Ok(binary_path)
 }
 
 fn setup_q_cli_mcp(memory_dir: &Path, dev_mode: bool) -> Result<bool> {
     let repo_root = get_repo_root()?;
-    
+
     // Choose build method based on mode
     let binary_path = if dev_mode {
         build_rust_server(&repo_root)?
     } else {
         install_rust_server(&repo_root)?
     };
-    
+
     // Build the command arguments for the Rust binary
     let mut cmd = Command::new("q");
     cmd.args([
-        "mcp", "add",
-        "--name", "hippo",
-        "--command", &binary_path.to_string_lossy(),
-        "--args", "--memory-dir",
-        "--args", &memory_dir.to_string_lossy(),
-        "--env", "HIPPO_LOG=info",
-        "--force",  // Always overwrite existing configuration
+        "mcp",
+        "add",
+        "--name",
+        "hippo",
+        "--command",
+        &binary_path.to_string_lossy(),
+        "--args",
+        "--memory-dir",
+        "--args",
+        &memory_dir.to_string_lossy(),
+        "--env",
+        "HIPPO_LOG=info",
+        "--force", // Always overwrite existing configuration
     ]);
-    
+
     println!("🔧 Registering Rust Hippo MCP server with Q CLI...");
     println!("   Memory path: {}", memory_dir.display());
     println!("   Binary path: {}", binary_path.display());
-    println!("   Logging: INFO level to {}/hippo.log", memory_dir.display());
-    
+    println!(
+        "   Logging: INFO level to {}/hippo.log",
+        memory_dir.display()
+    );
+
     let output = cmd.output().context("Failed to execute q mcp add")?;
-    
+
     if output.status.success() {
         println!("✅ MCP server 'hippo' registered successfully with Q CLI!");
         Ok(true)
@@ -328,41 +348,47 @@ fn setup_q_cli_mcp(memory_dir: &Path, dev_mode: bool) -> Result<bool> {
 
 fn setup_claude_code_mcp(memory_dir: &Path, scope: &ClaudeScope, dev_mode: bool) -> Result<bool> {
     let repo_root = get_repo_root()?;
-    
+
     // Choose build method based on mode
     let binary_path = if dev_mode {
         build_rust_server(&repo_root)?
     } else {
         install_rust_server(&repo_root)?
     };
-    
+
     let scope_str = match scope {
         ClaudeScope::User => "user",
         ClaudeScope::Local => "local",
         ClaudeScope::Project => "project",
     };
-    
+
     // Claude Code uses -- to separate command from its arguments
     let mut cmd = Command::new("claude");
     cmd.args([
-        "mcp", "add",
-        "--scope", scope_str,
-        "--env", "HIPPO_LOG=info",
+        "mcp",
+        "add",
+        "--scope",
+        scope_str,
+        "--env",
+        "HIPPO_LOG=info",
         "hippo",
         &binary_path.to_string_lossy(),
         "--",
         "--memory-dir",
         &memory_dir.to_string_lossy(),
     ]);
-    
+
     println!("🔧 Registering Rust Hippo MCP server with Claude Code...");
     println!("   Memory path: {}", memory_dir.display());
     println!("   Binary path: {}", binary_path.display());
-    println!("   Scope: {}", scope_str);
-    println!("   Logging: INFO level to {}/hippo.log", memory_dir.display());
-    
+    println!("   Scope: {scope_str}");
+    println!(
+        "   Logging: INFO level to {}/hippo.log",
+        memory_dir.display()
+    );
+
     let output = cmd.output().context("Failed to execute claude mcp add")?;
-    
+
     if output.status.success() {
         println!("✅ MCP server 'hippo' registered successfully with Claude Code!");
         Ok(true)
@@ -370,11 +396,11 @@ fn setup_claude_code_mcp(memory_dir: &Path, scope: &ClaudeScope, dev_mode: bool)
         let stderr = String::from_utf8_lossy(&output.stderr);
         println!("❌ Failed to register MCP server with Claude Code:");
         println!("   Error: {}", stderr.trim());
-        
+
         if stderr.contains("already exists") {
             println!("\n💡 Tip: Remove existing server with: claude mcp remove hippo");
         }
-        
+
         Ok(false)
     }
 }
@@ -382,7 +408,7 @@ fn setup_claude_code_mcp(memory_dir: &Path, scope: &ClaudeScope, dev_mode: bool)
 fn print_next_steps(memory_dir: &Path, tool: &CLITool, dev_mode: bool) -> Result<()> {
     let repo_root = get_repo_root()?;
     let guidance_path = repo_root.join("guidance.md");
-    
+
     if dev_mode {
         println!("\n🎉 Development setup complete! Rust Hippo server is ready.");
         println!("🔧 Running in development mode - server will use target/release/hippo-server");
@@ -390,7 +416,7 @@ fn print_next_steps(memory_dir: &Path, tool: &CLITool, dev_mode: bool) -> Result
         println!("\n🎉 Production setup complete! Rust Hippo server is installed.");
         println!("📦 Server installed to PATH as 'hippo-server'");
     }
-    
+
     match tool {
         CLITool::QCli | CLITool::Both => {
             println!("\n📝 For Q CLI:");
@@ -401,7 +427,7 @@ fn print_next_steps(memory_dir: &Path, tool: &CLITool, dev_mode: bool) -> Result
         }
         _ => {}
     }
-    
+
     match tool {
         CLITool::ClaudeCode | CLITool::Both => {
             println!("\n📝 For Claude Code:");
@@ -412,9 +438,12 @@ fn print_next_steps(memory_dir: &Path, tool: &CLITool, dev_mode: bool) -> Result
         }
         _ => {}
     }
-    
-    println!("\n💾 Your memories will be stored at: {}", memory_dir.display());
+
+    println!(
+        "\n💾 Your memories will be stored at: {}",
+        memory_dir.display()
+    );
     println!("🚀 Performance: ~100-500ms startup vs 6s Python version");
-    
+
     Ok(())
 }

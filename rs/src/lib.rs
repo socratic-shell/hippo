@@ -11,7 +11,7 @@ pub mod search;
 pub mod storage;
 
 // Re-export main types for convenience
-pub use models::{Insight, InsightId, HippoStorage, SearchResult};
+pub use models::{HippoStorage, Insight, InsightId, SearchResult};
 pub use search::SearchEngine;
 pub use storage::{FileStorage, StorageError};
 

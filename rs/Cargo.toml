@@ -7,6 +7,9 @@ description = "AI-Generated Insights Memory System - Rust implementation"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/socratic-shell/hippo"
 
+[lints]
+workspace = true
+
 [lib]
 name = "hippo"
 path = "src/lib.rs"

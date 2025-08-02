@@ -5,6 +5,9 @@ edition = "2021"
 authors = ["Niko Matsakis <niko@alum.mit.edu>"]
 description = "Hippo development setup tool"
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "setup"
 path = "src/main.rs"
