@@ -28,8 +28,7 @@ async fn test_mcp_server_startup_and_list_tools() {
     // Ensure the server binary exists
     if !server_path.exists() {
         panic!(
-            "Server binary not found at {:?}. Run 'cargo build' first.",
-            server_path
+            "Server binary not found at {server_path:?}. Run 'cargo build' first."
         );
     }
 
@@ -175,8 +174,7 @@ async fn test_mcp_basic_tool_functionality() {
                 .expect("Missing total_count in search response");
             assert!(
                 total_count > 0,
-                "Expected at least 1 search result, got {}",
-                total_count
+                "Expected at least 1 search result, got {total_count}"
             );
 
             // Verify the result contains our test content
@@ -245,8 +243,7 @@ async fn test_mcp_error_handling() {
     // Verify we get an error response (should be Err, not Ok with is_error=true)
     assert!(
         result.is_err(),
-        "Expected error response for invalid importance, got: {:?}",
-        result
+        "Expected error response for invalid importance, got: {result:?}"
     );
 
     // Clean shutdown

@@ -206,13 +206,12 @@ async fn test_model_loading_performance() {
     engine.initialize().await.unwrap();
 
     let duration = start.elapsed();
-    println!("Model loaded in: {:?}", duration);
+    println!("Model loaded in: {duration:?}");
 
     // Should be significantly faster than Python (target: < 1s)
     assert!(
         duration.as_millis() < 2000,
-        "Model loading took too long: {:?}",
-        duration
+        "Model loading took too long: {duration:?}"
     );
 }
 
@@ -243,14 +242,12 @@ async fn test_embedding_accuracy() {
     // Rust-related texts should be more similar than unrelated texts
     assert!(
         sim_rust > sim_different,
-        "Rust similarity ({}) should be higher than different topics ({})",
-        sim_rust,
-        sim_different
+        "Rust similarity ({sim_rust}) should be higher than different topics ({sim_different})"
     );
 
     // Both should be reasonable similarity scores
-    assert!(sim_rust > 0.3, "Rust similarity too low: {}", sim_rust);
-    assert!(sim_rust < 1.0, "Rust similarity too high: {}", sim_rust);
+    assert!(sim_rust > 0.3, "Rust similarity too low: {sim_rust}");
+    assert!(sim_rust < 1.0, "Rust similarity too high: {sim_rust}");
 }
 
 #[tokio::test]

@@ -85,12 +85,11 @@ impl HippoServer {
         // Store insight
         let mut storage = self.storage.lock().await;
         storage.store_insight(insight).await.map_err(|e| {
-            McpError::internal_error(format!("Failed to store insight: {}", e), None)
+            McpError::internal_error(format!("Failed to store insight: {e}"), None)
         })?;
 
         Ok(CallToolResult::success(vec![Content::text(format!(
-            "Recorded insight with UUID: {}",
-            insight_id
+            "Recorded insight with UUID: {insight_id}"
         ))]))
     }
 
@@ -104,7 +103,7 @@ impl HippoServer {
 
         let storage = self.storage.lock().await;
         let insights = storage.get_all_insights().await.map_err(|e| {
-            McpError::internal_error(format!("Failed to load insights: {}", e), None)
+            McpError::internal_error(format!("Failed to load insights: {e}"), None)
         })?;
 
         // Apply situation filter if provided
@@ -157,7 +156,7 @@ impl HippoServer {
                 offset,
             )
             .await
-            .map_err(|e| McpError::internal_error(format!("Search failed: {}", e), None))?;
+            .map_err(|e| McpError::internal_error(format!("Search failed: {e}"), None))?;
 
         let total_count = search_results.len();
 
@@ -186,7 +185,7 @@ impl HippoServer {
             .get_insight(params.uuid)
             .await
             .map_err(|e| {
-                McpError::internal_error(format!("Failed to retrieve insight: {}", e), None)
+                McpError::internal_error(format!("Failed to retrieve insight: {e}"), None)
             })?
             .ok_or_else(|| McpError::invalid_params("Insight not found", None))?;
 
@@ -219,7 +218,7 @@ impl HippoServer {
 
         // Update storage
         storage.update_insight(insight).await.map_err(|e| {
-            McpError::internal_error(format!("Failed to update insight: {}", e), None)
+            McpError::internal_error(format!("Failed to update insight: {e}"), None)
         })?;
 
         Ok(CallToolResult::success(vec![Content::text(format!(
@@ -245,7 +244,7 @@ impl HippoServer {
             .apply_reinforcement(params.upvotes, params.downvotes)
             .await
             .map_err(|e| {
-                McpError::internal_error(format!("Failed to apply reinforcement: {}", e), None)
+                McpError::internal_error(format!("Failed to apply reinforcement: {e}"), None)
             })?;
 
         Ok(CallToolResult::success(vec![Content::text(
@@ -279,7 +278,7 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::from_default_env()
-                .add_directive(format!("hippo={}", log_level).parse()?)
+                .add_directive(format!("hippo={log_level}").parse()?)
                 .add_directive("fastembed=info".parse()?),
         )
         .with_writer(std::io::stderr)
