@@ -215,12 +215,30 @@ impl FileStorage {
     /// Get the current active day, incrementing if it's a new calendar day
     pub async fn get_current_active_day(&self) -> Result<u32, StorageError> {
         let mut metadata = self.load_metadata().await?;
-        let current_day = metadata.get_current_active_day();
+        let mut updated = false;
+        let current_day = metadata.get_current_active_day(&mut updated);
         
-        // Save metadata if it was updated (new day)
-        self.save_metadata(&metadata).await?;
+        // Save metadata only if it was updated (new day)
+        if updated {
+            self.save_metadata(&metadata).await?;
+        }
         
         Ok(current_day)
+    }
+    
+    /// Record access to an insight for frequency tracking
+    pub async fn record_insight_access(&mut self, insight_id: InsightId, current_active_day: u32) -> Result<(), StorageError> {
+        self.ensure_cache_loaded().await?;
+        
+        let mut cache = self.cache.write().await;
+        if let Some(insight) = cache.get_mut(&insight_id) {
+            insight.record_access(current_active_day);
+            
+            // Save the updated insight to disk
+            self.save_insight_to_file(insight).await?;
+        }
+        
+        Ok(())
     }
 }
 

@@ -6,6 +6,7 @@
 //! This library provides both a programmatic API for embedding into other applications
 //! and a standalone MCP server for direct usage.
 
+pub mod constants;
 pub mod models;
 pub mod search;
 pub mod storage;

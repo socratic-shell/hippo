@@ -78,12 +78,27 @@ impl HippoServer {
             ));
         }
 
+        let mut storage = self.storage.lock().await;
+        
+        // Get current active day for initial access recording
+        tracing::debug!("Getting current active day for insight creation");
+        let current_active_day = storage.get_current_active_day().await.map_err(|e| {
+            tracing::error!("Failed to get current active day: {}", e);
+            McpError::internal_error(format!("Failed to get current active day: {e}"), None)
+        })?;
+        tracing::debug!("Current active day: {}", current_active_day);
+
         // Create new insight
-        let insight = Insight::new(params.content, params.situation, params.importance);
+        let mut insight = Insight::new(params.content, params.situation, params.importance);
+        
+        // Record initial access (creation counts as first access)
+        tracing::debug!("Recording initial access for insight {}", insight.uuid);
+        insight.record_access(current_active_day);
+        tracing::debug!("Insight daily_access_counts after recording: {:?}", insight.daily_access_counts);
+        
         let insight_id = insight.uuid;
 
         // Store insight
-        let mut storage = self.storage.lock().await;
         storage.store_insight(insight).await.map_err(|e| {
             McpError::internal_error(format!("Failed to store insight: {e}"), None)
         })?;
@@ -101,39 +116,18 @@ impl HippoServer {
     ) -> Result<CallToolResult, McpError> {
         tracing::info!("Searching insights for query: {}", params.query);
 
-        let storage = self.storage.lock().await;
+        let mut storage = self.storage.lock().await;
+        
+        // Get current active day for temporal scoring
+        let current_active_day = storage.get_current_active_day().await.map_err(|e| {
+            McpError::internal_error(format!("Failed to get current active day: {e}"), None)
+        })?;
+        
         let insights = storage.get_all_insights().await.map_err(|e| {
             McpError::internal_error(format!("Failed to load insights: {e}"), None)
         })?;
 
-        // Apply situation filter if provided
-        let filtered_insights: Vec<_> = if let Some(situation_filters) = &params.situation_filter {
-            insights
-                .into_iter()
-                .filter(|insight| {
-                    situation_filters.iter().any(|filter| {
-                        insight.situation.iter().any(|situation| {
-                            situation.to_lowercase().contains(&filter.to_lowercase())
-                        })
-                    })
-                })
-                .collect()
-        } else {
-            insights
-        };
-
-        // If no insights match situation filter, return empty results
-        if filtered_insights.is_empty() {
-            return Ok(CallToolResult::success(vec![Content::text(
-                serde_json::to_string_pretty(&serde_json::json!({
-                    "results": [],
-                    "total_count": 0
-                }))
-                .unwrap(),
-            )]));
-        }
-
-        // Perform semantic search
+        // Perform semantic search with temporal scoring
         let relevance_range = params.relevance_range.as_ref();
         let min_relevance = relevance_range.map(|r| r.min).unwrap_or(0.1);
         let max_relevance = relevance_range.and_then(|r| r.max).unwrap_or(f64::INFINITY);
@@ -148,7 +142,8 @@ impl HippoServer {
             .search_engine
             .search(
                 &params.query,
-                &filtered_insights,
+                &insights,
+                current_active_day,
                 min_relevance,
                 max_relevance,
                 situation_filters,
@@ -157,6 +152,13 @@ impl HippoServer {
             )
             .await
             .map_err(|e| McpError::internal_error(format!("Search failed: {e}"), None))?;
+
+        // Record access for returned insights (for frequency tracking)
+        for result in &search_results {
+            if let Err(e) = storage.record_insight_access(result.insight.uuid, current_active_day).await {
+                tracing::warn!("Failed to record access for insight {}: {}", result.insight.uuid, e);
+            }
+        }
 
         let total_count = search_results.len();
 

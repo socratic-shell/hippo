@@ -3,6 +3,9 @@
 //! These models maintain JSON compatibility with the Python implementation
 //! to ensure seamless migration of existing memories.
 
+use crate::constants::{
+    FREQUENCY_WINDOW_DAYS, IMPORTANCE_DECAY_FACTOR, MAX_DAILY_ACCESS_ENTRIES, RECENCY_DECAY_RATE,
+};
 use chrono::{DateTime, NaiveDate, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -33,13 +36,17 @@ pub struct Insight {
     pub base_importance: f64,
 
     /// Current importance after reinforcement learning adjustments
-    pub current_importance: f64,
+    pub importance: f64,
 
     /// When this insight was created
     pub created_at: DateTime<Utc>,
 
     /// When importance was last modified (for decay calculations)
     pub importance_modified_at: DateTime<Utc>,
+    
+    /// Daily access counts: Vec<(active_day, count)>
+    /// Tracks how many times this insight was accessed on each active day
+    pub daily_access_counts: Vec<(u32, u32)>,
 }
 
 impl Insight {
@@ -48,21 +55,25 @@ impl Insight {
         let now = Utc::now();
         let uuid = Uuid::new_v4();
 
-        Self {
+        let insight = Self {
             uuid,
             content,
             situation,
             base_importance: importance,
-            current_importance: importance,
+            importance,
             created_at: now,
             importance_modified_at: now,
-        }
+            daily_access_counts: Vec::new(),
+        };
+        
+        tracing::debug!("Created new insight with daily_access_counts: {:?}", insight.daily_access_counts);
+        insight
     }
 
     /// Apply reinforcement (upvote = 1.5x, downvote = 0.5x multiplier)
     pub fn apply_reinforcement(&mut self, upvote: bool) {
         let multiplier = if upvote { 1.5 } else { 0.5 };
-        self.current_importance = (self.current_importance * multiplier).min(1.0);
+        self.importance = (self.importance * multiplier).min(1.0);
         self.importance_modified_at = Utc::now();
     }
 
@@ -76,6 +87,87 @@ impl Insight {
     pub fn days_since_importance_modified(&self) -> f64 {
         let duration = Utc::now().signed_duration_since(self.importance_modified_at);
         duration.num_milliseconds() as f64 / (1000.0 * 60.0 * 60.0 * 24.0)
+    }
+    
+    /// Compute current importance with temporal decay
+    /// Formula: current_importance = importance * (0.9 ^ days_since_modified)
+    pub fn compute_current_importance(&self) -> f64 {
+        let days_elapsed = self.days_since_importance_modified();
+        let decay_factor = IMPORTANCE_DECAY_FACTOR.powf(days_elapsed);
+        self.importance * decay_factor
+    }
+    
+    /// Record an access to this insight on the given active day
+    pub fn record_access(&mut self, current_active_day: u32) {
+        tracing::debug!("Recording access for insight {} on day {}", self.uuid, current_active_day);
+        
+        // Find today's entry in the access counts list
+        if let Some(last_entry) = self.daily_access_counts.last_mut() {
+            if last_entry.0 == current_active_day {
+                // Increment existing entry for today
+                last_entry.1 += 1;
+                tracing::debug!("Incremented access count to {} for day {}", last_entry.1, current_active_day);
+                return;
+            }
+        }
+        
+        // Add new entry for today
+        self.daily_access_counts.push((current_active_day, 1));
+        tracing::debug!("Added new access entry: ({}, 1)", current_active_day);
+        
+        // Trim list to max entries (remove oldest)
+        if self.daily_access_counts.len() > MAX_DAILY_ACCESS_ENTRIES {
+            self.daily_access_counts.remove(0);
+            tracing::debug!("Trimmed access counts to {} entries", MAX_DAILY_ACCESS_ENTRIES);
+        }
+    }
+    
+    /// Calculate frequency as accesses per active day over a recent window
+    pub fn calculate_frequency(&self, current_active_day: u32, window_days: u32) -> f64 {
+        if self.daily_access_counts.is_empty() {
+            return 0.0;
+        }
+        
+        // Use recent window instead of full history to avoid frequency dilution
+        let window_start = current_active_day.saturating_sub(window_days - 1);
+        let recent_entries: Vec<_> = self.daily_access_counts
+            .iter()
+            .filter(|(day, _)| *day >= window_start)
+            .collect();
+            
+        if recent_entries.is_empty() {
+            return 0.0;
+        }
+        
+        let oldest_recent_day = recent_entries.first().unwrap().0;
+        let newest_recent_day = recent_entries.last().unwrap().0;
+        let recent_days_spanned = newest_recent_day - oldest_recent_day + 1;
+        let total_recent_accesses: u32 = recent_entries.iter().map(|(_, count)| *count).sum();
+        
+        total_recent_accesses as f64 / recent_days_spanned as f64
+    }
+    
+    /// Calculate frequency using default window
+    pub fn calculate_frequency_default(&self, current_active_day: u32) -> f64 {
+        self.calculate_frequency(current_active_day, FREQUENCY_WINDOW_DAYS)
+    }
+    
+    /// Calculate recency score using exponential decay based on active days since last access
+    pub fn calculate_recency_score(&self, current_active_day: u32, decay_rate: f64) -> f64 {
+        if self.daily_access_counts.is_empty() {
+            // This should never happen since creation records first access,
+            // but handle gracefully just in case
+            return 0.0;
+        }
+        
+        let last_access_day = self.daily_access_counts.last().unwrap().0;
+        let active_days_since_access = current_active_day - last_access_day;
+        (-decay_rate * active_days_since_access as f64).exp()
+    }
+    
+    /// Calculate recency score using default decay rate
+    pub fn calculate_recency_score_default(&self, current_active_day: u32) -> f64 {
+        self.calculate_recency_score(current_active_day, RECENCY_DECAY_RATE)
     }
 }
 
@@ -148,7 +240,7 @@ mod tests {
         assert_eq!(insight.content, content);
         assert_eq!(insight.situation, situation);
         assert_eq!(insight.base_importance, importance);
-        assert_eq!(insight.current_importance, importance);
+        assert_eq!(insight.importance, importance);
         assert!(insight.uuid != Uuid::nil());
     }
 
@@ -158,11 +250,11 @@ mod tests {
 
         // Test upvote
         insight.apply_reinforcement(true);
-        assert!((insight.current_importance - 0.9).abs() < 1e-10); // 0.6 * 1.5
+        assert!((insight.importance - 0.9).abs() < 1e-10); // 0.6 * 1.5
 
         // Test downvote
         insight.apply_reinforcement(false);
-        assert!((insight.current_importance - 0.45).abs() < 1e-10); // 0.9 * 0.5
+        assert!((insight.importance - 0.45).abs() < 1e-10); // 0.9 * 0.5
 
         // Test importance cap at 1.0
         let mut high_insight = Insight::new(
@@ -171,7 +263,7 @@ mod tests {
             0.8,
         );
         high_insight.apply_reinforcement(true);
-        assert_eq!(high_insight.current_importance, 1.0); // Capped at 1.0
+        assert_eq!(high_insight.importance, 1.0); // Capped at 1.0
     }
 
     #[test]
@@ -299,7 +391,8 @@ impl Default for HippoMetadata {
 
 impl HippoMetadata {
     /// Get the current active day, incrementing if it's a new calendar day
-    pub fn get_current_active_day(&mut self) -> u32 {
+    /// Sets `updated` to true if the active day counter was incremented
+    pub fn get_current_active_day(&mut self, updated: &mut bool) -> u32 {
         let today = chrono::Utc::now().date_naive();
         let today_str = today.to_string();
         
@@ -317,6 +410,7 @@ impl HippoMetadata {
         if is_new_day {
             self.active_day_counter += 1;
             self.last_calendar_date_used = Some(today_str);
+            *updated = true;
         }
         
         self.active_day_counter

@@ -63,7 +63,7 @@ async fn test_search_engine_basic() {
     // Test with empty insights (should return empty results, not crash)
     let insights = vec![];
     let results = engine
-        .search("test query", &insights, 0.0, 1.0, &[], 10, 0)
+        .search("test query", &insights, 1, 0.0, 1.0, &[], 10, 0)
         .await;
 
     // Should fail gracefully when model is not loaded and there are insights to process
@@ -175,6 +175,7 @@ async fn test_search_parameters() {
         .search(
             "test",
             &insights,
+            1,
             0.0,
             1.0,
             &["nonexistent".to_string()], // Filter that matches nothing
@@ -283,7 +284,7 @@ async fn test_full_search_integration() {
 
     // Search for Rust-related content
     let results = engine
-        .search("memory safety programming", &insights, 0.0, 1.0, &[], 10, 0)
+        .search("memory safety programming", &insights, 1, 0.0, 1.0, &[], 10, 0)
         .await
         .unwrap();
 
@@ -303,6 +304,7 @@ async fn test_full_search_integration() {
         .search(
             "programming",
             &insights,
+            1,
             0.0,
             1.0,
             &["rust".to_string()],
