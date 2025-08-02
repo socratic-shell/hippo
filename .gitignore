@@ -25,3 +25,4 @@ wheels/
 # Rust build artifacts
 rs/target/
 target/
+.fastembed_cache/

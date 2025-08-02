@@ -1,0 +1,41 @@
+version: 2
+updates:
+  # Enable version updates for Cargo
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    groups:
+      # Group patch updates together
+      patch-updates:
+        applies-to: version-updates
+        update-types:
+          - "patch"
+      # Group minor updates for related crates
+      tokio-updates:
+        patterns:
+          - "tokio*"
+      serde-updates:
+        patterns:
+          - "serde*"
+      clap-updates:
+        patterns:
+          - "clap*"
+    # Auto-merge patch updates for trusted dependencies
+    auto-merge:
+      - dependency-type: "direct:production"
+        update-type: "semver:patch"
+      - dependency-type: "indirect"
+        update-type: "semver:patch"
+
+  # Enable version updates for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
