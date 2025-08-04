@@ -8,11 +8,13 @@
 
 pub mod constants;
 pub mod models;
+pub mod project_detection;
 pub mod search;
 pub mod storage;
 
 // Re-export main types for convenience
 pub use models::{HippoStorage, Insight, InsightId, SearchResult};
+pub use project_detection::{ProjectDetector, ProjectReport, ProjectType};
 pub use search::SearchEngine;
 pub use storage::{FileStorage, StorageError};
 

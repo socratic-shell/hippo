@@ -57,6 +57,9 @@ fastembed = { workspace = true }
 # MCP SDK
 rmcp = { workspace = true }
 
+# TOML parsing for project detection
+toml = "0.8"
+
 [dev-dependencies]
 # Testing
 tokio-test = { workspace = true }
